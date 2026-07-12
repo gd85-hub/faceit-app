@@ -50,3 +50,9 @@ next-env.d.ts
 .next-dev.out.log
 dev-server.err.log
 dev-server.log
+
+# local spike scripts
+/scripts/profile-spike.ts
+
+# Windows shortcuts
+*.lnk

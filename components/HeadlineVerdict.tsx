@@ -49,14 +49,16 @@ export function scoreGroups(comparison: ComparisonResult) {
   const closeCount = comparison.groups.filter(
     (group) => group.verdict === "close" || group.verdict === "insufficient",
   ).length;
+  const closeGroups = comparison.groups
+    .filter((group) => group.verdict === "close" || group.verdict === "insufficient")
+    .map((group) => group.group);
 
-  return { groupsA, groupsB, closeCount };
+  return { groupsA, groupsB, closeCount, closeGroups };
 }
 
-function scoreLine(
+export function scoreLine(
   groupsA: GroupComparison["group"][],
   groupsB: GroupComparison["group"][],
-  closeCount: number,
   nicknameA: string,
   nicknameB: string,
 ) {
@@ -70,16 +72,13 @@ function scoreLine(
       : { nickname: nicknameA, count: groupsA.length };
   const parts = [`${leader.nickname} ${leader.count}`, `${other.count} ${other.nickname}`];
 
-  if (closeCount > 0) {
-    parts.push(`${closeCount} close`);
-  }
-
   return parts.join(" \u00b7 ");
 }
 
-function summaryLine(
+export function summaryLine(
   groupsA: GroupComparison["group"][],
   groupsB: GroupComparison["group"][],
+  closeGroups: GroupComparison["group"][],
   nicknameA: string,
   nicknameB: string,
 ) {
@@ -102,6 +101,10 @@ function summaryLine(
       clauses.push(`${nicknameB} leads on ${formatGroupList(groupsB)}`);
     }
 
+    if (closeGroups.length > 0) {
+      clauses.push(`${formatGroupList(closeGroups)} are even`);
+    }
+
     return `${clauses.join("; ")}.`;
   }
 
@@ -113,6 +116,10 @@ function summaryLine(
 
   if (other.groups.length > 0) {
     clauses.push(`${other.nickname} leads on ${formatGroupList(other.groups)}`);
+  }
+
+  if (closeGroups.length > 0) {
+    clauses.push(`${formatGroupList(closeGroups)} are even`);
   }
 
   return `${clauses.join("; ")}.`;
@@ -159,14 +166,14 @@ export function columnMetrics(
       .toSorted((aMetric, bMetric) => metricGap(bMetric) - metricGap(aMetric));
 
     return {
-      heading: `Stronger for ${nickname}`,
+      heading: nickname,
       mode: "stronger",
       metrics: [...leadingPrimary, ...leadingSecondary].slice(0, 4),
     };
   }
 
   return {
-    heading: `Closest for ${nickname}`,
+    heading: nickname,
     mode: "closest",
     metrics: comparable
       .filter((metric) => metric.status === trailingStatus(side))
@@ -190,16 +197,18 @@ function MetricColumnList({
   column: MetricColumn;
   side: PlayerSide;
 }) {
-  const headingClass =
+  const captionClass =
     column.mode === "stronger" ? "text-[var(--accent)]" : "text-[var(--text-dim)]";
   const valueClass =
     column.mode === "stronger" ? "text-[var(--accent)]" : "text-[var(--text-dim)]";
+  const caption = column.mode === "stronger" ? "leads here" : "smallest gaps";
 
   return (
     <div>
-      <h2 className={["text-sm font-semibold", headingClass].join(" ")}>
-        {column.heading}
-      </h2>
+      <h2 className="text-sm font-normal text-[var(--text)]">{column.heading}</h2>
+      <p className={["mt-1 text-xs font-semibold", captionClass].join(" ")}>
+        {caption}
+      </p>
       {column.metrics.length > 0 ? (
         <ul className="mt-4 space-y-3">
           {column.metrics.map((metric) => (
@@ -233,7 +242,7 @@ export function HeadlineVerdict({
   nicknameA,
   nicknameB,
 }: HeadlineVerdictProps) {
-  const { groupsA, groupsB, closeCount } = scoreGroups(comparison);
+  const { groupsA, groupsB, closeGroups } = scoreGroups(comparison);
   const columnA = columnMetrics(comparison, "A", nicknameA);
   const columnB = columnMetrics(comparison, "B", nicknameB);
 
@@ -241,13 +250,18 @@ export function HeadlineVerdict({
     <section className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-7 shadow-sm">
       <div>
         <p className="text-4xl font-bold tracking-tight text-[var(--text)]">
-          {scoreLine(groupsA, groupsB, closeCount, nicknameA, nicknameB)}
+          {scoreLine(groupsA, groupsB, nicknameA, nicknameB)}
         </p>
         <p className="mt-3 text-sm text-[var(--text-dim)]">
-          {summaryLine(groupsA, groupsB, nicknameA, nicknameB)}
+          {summaryLine(groupsA, groupsB, closeGroups, nicknameA, nicknameB)}
         </p>
 
-        <div className="mt-8 grid gap-8 border-t border-[var(--border)] pt-6 md:grid-cols-2">
+        <div className="mt-8 border-t border-[var(--border)] pt-6">
+          <p className="text-xs text-[var(--text-dim)]">
+            Where each player comes out ahead
+          </p>
+        </div>
+        <div className="mt-4 grid gap-8 md:grid-cols-2">
           <MetricColumnList column={columnA} side="A" />
           <div className="border-[var(--border)] md:border-l md:pl-8">
             <MetricColumnList column={columnB} side="B" />

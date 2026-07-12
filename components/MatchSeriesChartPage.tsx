@@ -6,7 +6,6 @@ import { useEffect, useMemo, useReducer } from "react";
 import {
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   ResponsiveContainer,
   Scatter,
@@ -69,6 +68,11 @@ const metricLabels = {
   adr: "ADR",
 } satisfies Record<ChartMetric, string>;
 
+const playerColors = {
+  A: "#3b82f6",
+  B: "#f59e0b",
+} satisfies Record<"A" | "B", string>;
+
 type ChartState = {
   data: MatchSeriesResponse | null;
   error: string | null;
@@ -126,7 +130,7 @@ function buildChartData(data: MatchSeriesResponse): ChartDatum[] {
 }
 
 function playerLineColor(player: "A" | "B") {
-  return player === "A" ? "var(--text)" : "var(--text-dim)";
+  return playerColors[player];
 }
 
 function MetricTabs({
@@ -233,6 +237,39 @@ function ChartTooltip({
   );
 }
 
+function ChartLegend({
+  nicknameA,
+  nicknameB,
+}: {
+  nicknameA: string;
+  nicknameB: string;
+}) {
+  return (
+    <div
+      className="mb-3 flex flex-wrap justify-end gap-4 text-xs"
+      aria-label="Chart legend"
+    >
+      {[
+        { nickname: nicknameA, color: playerLineColor("A") },
+        { nickname: nicknameB, color: playerLineColor("B") },
+      ].map((item) => (
+        <span
+          key={item.nickname}
+          className="inline-flex items-center gap-2"
+          style={{ color: item.color }}
+        >
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: item.color }}
+            aria-hidden="true"
+          />
+          <span>{item.nickname}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function MatchSeriesChart({ data }: { data: MatchSeriesResponse }) {
   const chartData = useMemo(() => buildChartData(data), [data]);
   const format = chartFormat(data.metric);
@@ -241,6 +278,7 @@ function MatchSeriesChart({ data }: { data: MatchSeriesResponse }) {
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+      <ChartLegend nicknameA={nicknameA} nicknameB={nicknameB} />
       <div className="h-[420px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
@@ -275,11 +313,6 @@ function MatchSeriesChart({ data }: { data: MatchSeriesResponse }) {
                   nicknameB={nicknameB}
                 />
               }
-            />
-            <Legend
-              verticalAlign="top"
-              align="right"
-              wrapperStyle={{ color: "var(--text-dim)", fontSize: 12 }}
             />
             <Line
               type="monotone"

@@ -53,6 +53,7 @@ dev-server.log
 
 # local spike scripts
 /scripts/profile-spike.ts
+/scripts/match-*-spike.ts
 
 # Windows shortcuts
 *.lnk

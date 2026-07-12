@@ -1,0 +1,305 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GET } from "./route";
+import { clearCacheForTests } from "@/lib/cache";
+import { getPlayerById, getPlayerStats, searchPlayer } from "@/lib/faceitClient";
+import { clearRateLimitForTests } from "@/lib/rateLimit";
+
+vi.mock("@/lib/faceitClient", () => ({
+  searchPlayer: vi.fn(),
+  getPlayerById: vi.fn(),
+  getPlayerStats: vi.fn(),
+}));
+
+const mockedSearchPlayer = vi.mocked(searchPlayer);
+const mockedGetPlayerById = vi.mocked(getPlayerById);
+const mockedGetPlayerStats = vi.mocked(getPlayerStats);
+
+function sample<T>(nickname: string, fileName: string): T {
+  return JSON.parse(
+    readFileSync(
+      path.join(process.cwd(), "api-samples", nickname, fileName),
+      "utf8",
+    ),
+  ) as T;
+}
+
+function request(pathname: string) {
+  return new Request(`http://localhost${pathname}`);
+}
+
+async function readJson(response: Response) {
+  return await response.json() as unknown;
+}
+
+function faceitError(status: number, body = "FACEIT private details") {
+  return Object.assign(new Error(`FACEIT ${status}: ${body}`), {
+    status,
+    body,
+  });
+}
+
+function mockExistingPlayer(nickname: string) {
+  const profile = sample<Record<string, unknown>>(nickname, "player.json");
+  const stats = sample<Record<string, unknown>>(nickname, "stats.json");
+  const playerId = profile.player_id as string;
+
+  mockedSearchPlayer.mockResolvedValueOnce({
+    items: [{ player_id: playerId }],
+  });
+  mockedGetPlayerById.mockResolvedValueOnce(profile);
+  mockedGetPlayerStats.mockResolvedValueOnce(stats);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  clearCacheForTests();
+  clearRateLimitForTests();
+});
+
+describe("GET /api/compare", () => {
+  it("returns 404 PLAYER_NOT_FOUND for an empty FACEIT search result", async () => {
+    mockedSearchPlayer
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [{ player_id: "other-id" }] });
+    mockedGetPlayerById.mockResolvedValueOnce(sample("minaa_", "player.json"));
+    mockedGetPlayerStats.mockResolvedValueOnce(sample("minaa_", "stats.json"));
+
+    const response = await GET(
+      request("/api/compare?playerA=missing&playerB=minaa_"),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({
+      error: {
+        code: "PLAYER_NOT_FOUND",
+        message: "Player not found: missing",
+        nicknames: ["missing"],
+      },
+    });
+  });
+
+  it("returns both nicknames when both players are not found", async () => {
+    mockedSearchPlayer
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [] });
+
+    const response = await GET(
+      request("/api/compare?playerA=missingA&playerB=missingB"),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({
+      error: {
+        code: "PLAYER_NOT_FOUND",
+        message: "Players not found: missingA, missingB",
+        nicknames: ["missingA", "missingB"],
+      },
+    });
+  });
+
+  it("returns profiles with comparison null and NO_STATS when a stats response has no lifetime", async () => {
+    mockExistingPlayer("minaa_");
+    const profile = sample<Record<string, unknown>>("I-Perfect-I", "player.json");
+    mockedSearchPlayer.mockResolvedValueOnce({
+      items: [{ player_id: profile.player_id }],
+    });
+    mockedGetPlayerById.mockResolvedValueOnce(profile);
+    mockedGetPlayerStats.mockResolvedValueOnce({});
+
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const body = await response.json() as {
+      comparison: unknown;
+      notice?: string;
+      playerA: unknown;
+      playerB: unknown;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.comparison).toBeNull();
+    expect(body.notice).toBe("NO_STATS");
+    expect(body.playerA).toBeTruthy();
+    expect(body.playerB).toBeTruthy();
+  });
+
+  it("rejects the same player with different case before requests", async () => {
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=MINAA_"),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      error: {
+        code: "SAME_PLAYER",
+        message: "Choose two different players.",
+        nicknames: [],
+      },
+    });
+    expect(mockedSearchPlayer).not.toHaveBeenCalled();
+  });
+
+  it("rejects nicknames with spaces or cyrillic characters before requests", async () => {
+    const withSpace = await GET(
+      request("/api/compare?playerA=minaa_%20x&playerB=I-Perfect-I"),
+    );
+    const withCyrillic = await GET(
+      request("/api/compare?playerA=%D0%BC%D0%B8%D0%BD%D0%B0&playerB=I-Perfect-I"),
+    );
+
+    expect(withSpace.status).toBe(400);
+    expect(await readJson(withSpace)).toEqual({
+      error: {
+        code: "INVALID_NICKNAME",
+        message:
+          "Invalid nickname. Use 1-30 characters: letters, digits, dash, underscore, or dot.",
+        nicknames: [],
+      },
+    });
+    expect(withCyrillic.status).toBe(400);
+    expect(mockedSearchPlayer).not.toHaveBeenCalled();
+  });
+
+  it("maps FACEIT 429 to RATE_LIMITED", async () => {
+    mockedSearchPlayer.mockRejectedValueOnce(faceitError(429));
+    mockExistingPlayer("I-Perfect-I");
+
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(429);
+    expect(body).toEqual({
+      error: {
+        code: "RATE_LIMITED",
+        message: "FACEIT API rate limit reached. Please try again later.",
+        nicknames: [],
+      },
+    });
+  });
+
+  it("rate limits /api/compare to 20 requests per minute per IP", async () => {
+    for (let index = 0; index < 20; index += 1) {
+      const response = await GET(
+        new Request("http://localhost/api/compare?playerA=minaa_&playerB=MINAA_", {
+          headers: {
+            "x-forwarded-for": "203.0.113.10",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(400);
+    }
+
+    const response = await GET(
+      new Request("http://localhost/api/compare?playerA=minaa_&playerB=MINAA_", {
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+        },
+      }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(429);
+    expect(body).toEqual({
+      error: {
+        code: "RATE_LIMITED",
+        message: "FACEIT API rate limit reached. Please try again later.",
+        nicknames: [],
+      },
+    });
+  });
+
+  it("maps FACEIT 500 to UPSTREAM_ERROR without proxying the FACEIT body", async () => {
+    mockedSearchPlayer.mockRejectedValueOnce(
+      faceitError(500, "FACEIT exploded with secret details"),
+    );
+    mockExistingPlayer("I-Perfect-I");
+
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const bodyText = await response.text();
+
+    expect(response.status).toBe(502);
+    expect(bodyText).toContain("UPSTREAM_ERROR");
+    expect(bodyText).not.toContain("FACEIT exploded");
+    expect(bodyText).not.toContain("secret details");
+  });
+
+  it("maps FACEIT timeout to UPSTREAM_ERROR with HTTP 504", async () => {
+    mockedSearchPlayer.mockRejectedValueOnce(faceitError(504, "timeout body"));
+    mockExistingPlayer("I-Perfect-I");
+
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(504);
+    expect(body).toEqual({
+      error: {
+        code: "UPSTREAM_ERROR",
+        message: "FACEIT API is unavailable. Please try again later.",
+        nicknames: [],
+      },
+    });
+  });
+
+  it("returns a comparison for mocked minaa_ and I-Perfect-I data", async () => {
+    mockExistingPlayer("minaa_");
+    mockExistingPlayer("I-Perfect-I");
+
+    const response = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const body = await response.json() as {
+      comparison: {
+        biggestGap: {
+          metricKey: string;
+        };
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.comparison.biggestGap.metricKey).toBe("clutch1v2");
+  });
+
+  it("uses cached player IDs, profiles, and stats on the second identical request", async () => {
+    mockExistingPlayer("minaa_");
+    mockExistingPlayer("I-Perfect-I");
+
+    const first = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const faceitCallsAfterFirst =
+      mockedSearchPlayer.mock.calls.length +
+      mockedGetPlayerById.mock.calls.length +
+      mockedGetPlayerStats.mock.calls.length;
+
+    const second = await GET(
+      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+    );
+    const faceitCallsAfterSecond =
+      mockedSearchPlayer.mock.calls.length +
+      mockedGetPlayerById.mock.calls.length +
+      mockedGetPlayerStats.mock.calls.length;
+    const secondRequestFaceitCalls =
+      faceitCallsAfterSecond - faceitCallsAfterFirst;
+
+    console.log(
+      `Cache check: FACEIT calls after first request=${faceitCallsAfterFirst}; after second request=${faceitCallsAfterSecond}; second request FACEIT calls=${secondRequestFaceitCalls}`,
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(faceitCallsAfterFirst).toBe(6);
+    expect(faceitCallsAfterSecond).toBe(faceitCallsAfterFirst);
+  });
+});

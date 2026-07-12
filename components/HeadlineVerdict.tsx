@@ -1,11 +1,5 @@
-import { formatMetricValue } from "@/lib/formatters";
 import { groupLabels } from "@/lib/labels";
-import type {
-  ComparisonResult,
-  GroupComparison,
-  MetricComparison,
-  MetricStatus,
-} from "@/types/comparison";
+import type { ComparisonResult, GroupComparison } from "@/types/comparison";
 
 type HeadlineVerdictProps = {
   comparison: ComparisonResult;
@@ -13,12 +7,10 @@ type HeadlineVerdictProps = {
   nicknameB: string;
 };
 
-type PlayerSide = "A" | "B";
-
-type MetricColumn = {
-  heading: string;
-  mode: "stronger" | "closest";
-  metrics: MetricComparison[];
+type GroupBucket = {
+  groupsA: GroupComparison["group"][];
+  groupsB: GroupComparison["group"][];
+  evenGroups: GroupComparison["group"][];
 };
 
 function groupName(group: GroupComparison["group"]) {
@@ -39,202 +31,67 @@ function formatGroupList(groups: GroupComparison["group"][]) {
   )}`;
 }
 
-export function scoreGroups(comparison: ComparisonResult) {
-  const groupsA = comparison.groups
-    .filter((group) => group.verdict === "A_stronger")
-    .map((group) => group.group);
-  const groupsB = comparison.groups
-    .filter((group) => group.verdict === "B_stronger")
-    .map((group) => group.group);
-  const closeCount = comparison.groups.filter(
-    (group) => group.verdict === "close" || group.verdict === "insufficient",
-  ).length;
-  const closeGroups = comparison.groups
-    .filter((group) => group.verdict === "close" || group.verdict === "insufficient")
-    .map((group) => group.group);
-
-  return { groupsA, groupsB, closeCount, closeGroups };
-}
-
-export function scoreLine(
-  groupsA: GroupComparison["group"][],
-  groupsB: GroupComparison["group"][],
-  nicknameA: string,
-  nicknameB: string,
-) {
-  const leader =
-    groupsB.length > groupsA.length
-      ? { nickname: nicknameB, count: groupsB.length }
-      : { nickname: nicknameA, count: groupsA.length };
-  const other =
-    leader.nickname === nicknameA
-      ? { nickname: nicknameB, count: groupsB.length }
-      : { nickname: nicknameA, count: groupsA.length };
-  const parts = [`${leader.nickname} ${leader.count}`, `${other.count} ${other.nickname}`];
-
-  return parts.join(" \u00b7 ");
-}
-
-export function summaryLine(
-  groupsA: GroupComparison["group"][],
-  groupsB: GroupComparison["group"][],
-  closeGroups: GroupComparison["group"][],
-  nicknameA: string,
-  nicknameB: string,
-) {
-  const leaderIsA = groupsA.length >= groupsB.length;
-  const leader = leaderIsA
-    ? { nickname: nicknameA, groups: groupsA }
-    : { nickname: nicknameB, groups: groupsB };
-  const other = leaderIsA
-    ? { nickname: nicknameB, groups: groupsB }
-    : { nickname: nicknameA, groups: groupsA };
-
-  if (groupsA.length === groupsB.length) {
-    const clauses = [`${nicknameA} and ${nicknameB} are even overall`];
-
-    if (groupsA.length > 0) {
-      clauses.push(`${nicknameA} leads in ${formatGroupList(groupsA)}`);
-    }
-
-    if (groupsB.length > 0) {
-      clauses.push(`${nicknameB} leads on ${formatGroupList(groupsB)}`);
-    }
-
-    if (closeGroups.length > 0) {
-      clauses.push(`${formatGroupList(closeGroups)} are even`);
-    }
-
-    return `${clauses.join("; ")}.`;
-  }
-
-  const clauses = [
-    `${leader.nickname} stronger overall \u2014 leads in ${formatGroupList(
-      leader.groups,
-    )}`,
-  ];
-
-  if (other.groups.length > 0) {
-    clauses.push(`${other.nickname} leads on ${formatGroupList(other.groups)}`);
-  }
-
-  if (closeGroups.length > 0) {
-    clauses.push(`${formatGroupList(closeGroups)} are even`);
-  }
-
-  return `${clauses.join("; ")}.`;
-}
-
-function allMetrics(comparison: ComparisonResult) {
-  return comparison.groups.flatMap((group) => group.metrics);
-}
-
-function metricGap(metric: MetricComparison) {
-  return Math.abs(metric.diffPercent ?? 0);
-}
-
-function leadingStatus(side: PlayerSide): MetricStatus {
-  return side === "A" ? "ahead" : "behind";
-}
-
-function trailingStatus(side: PlayerSide): MetricStatus {
-  return side === "A" ? "behind" : "ahead";
-}
-
-export function columnMetrics(
-  comparison: ComparisonResult,
-  side: PlayerSide,
-  nickname: string,
-): MetricColumn {
-  const comparable = allMetrics(comparison).filter(
-    (metric) =>
-      metric.diffPercent !== null &&
-      metric.status !== "unknown" &&
-      metric.status !== "neutral",
-  );
-  const leading = comparable.filter(
-    (metric) => metric.status === leadingStatus(side),
-  );
-  const leadingPrimary = leading
-    .filter((metric) => metric.significance === "primary")
-    .toSorted((aMetric, bMetric) => metricGap(bMetric) - metricGap(aMetric))
-    .slice(0, 4);
-
-  if (leadingPrimary.length > 0) {
-    const leadingSecondary = leading
-      .filter((metric) => metric.significance === "secondary")
-      .toSorted((aMetric, bMetric) => metricGap(bMetric) - metricGap(aMetric));
-
-    return {
-      heading: nickname,
-      mode: "stronger",
-      metrics: [...leadingPrimary, ...leadingSecondary].slice(0, 4),
-    };
-  }
-
+export function groupVerdictBuckets(comparison: ComparisonResult): GroupBucket {
   return {
-    heading: nickname,
-    mode: "closest",
-    metrics: comparable
-      .filter((metric) => metric.status === trailingStatus(side))
-      .toSorted((aMetric, bMetric) => metricGap(aMetric) - metricGap(bMetric))
-      .slice(0, 3),
+    groupsA: comparison.groups
+      .filter((group) => group.verdict === "A_stronger")
+      .map((group) => group.group),
+    groupsB: comparison.groups
+      .filter((group) => group.verdict === "B_stronger")
+      .map((group) => group.group),
+    evenGroups: comparison.groups
+      .filter(
+        (group) => group.verdict === "close" || group.verdict === "insufficient",
+      )
+      .map((group) => group.group),
   };
 }
 
-function playerValue(metric: MetricComparison, side: PlayerSide) {
-  return side === "A" ? metric.valueA : metric.valueB;
+export function headlineSummary(
+  { groupsA, groupsB, evenGroups }: GroupBucket,
+  nicknameA: string,
+  nicknameB: string,
+) {
+  const parts: string[] = [];
+
+  if (groupsA.length > 0) {
+    parts.push(`${nicknameA} is stronger in ${formatGroupList(groupsA)}`);
+  }
+
+  if (groupsB.length > 0) {
+    parts.push(`${nicknameB} is stronger in ${formatGroupList(groupsB)}`);
+  }
+
+  if (evenGroups.length > 0) {
+    parts.push(`${formatGroupList(evenGroups)} are even`);
+  }
+
+  return `${parts.join("; ")}.`;
 }
 
-function otherValue(metric: MetricComparison, side: PlayerSide) {
-  return side === "A" ? metric.valueB : metric.valueA;
+export function groupVerdictText(
+  group: GroupComparison,
+  nicknameA: string,
+  nicknameB: string,
+) {
+  switch (group.verdict) {
+    case "A_stronger":
+      return `${nicknameA} higher`;
+    case "B_stronger":
+      return `${nicknameB} higher`;
+    case "close":
+      return "even";
+    case "insufficient":
+      return "not enough data";
+  }
 }
 
-function MetricColumnList({
-  column,
-  side,
-}: {
-  column: MetricColumn;
-  side: PlayerSide;
-}) {
-  const captionClass =
-    column.mode === "stronger" ? "text-[var(--accent)]" : "text-[var(--text-dim)]";
-  const valueClass =
-    column.mode === "stronger" ? "text-[var(--accent)]" : "text-[var(--text-dim)]";
-  const caption = column.mode === "stronger" ? "leads here" : "smallest gaps";
+function verdictClass(group: GroupComparison) {
+  if (group.verdict === "A_stronger" || group.verdict === "B_stronger") {
+    return "text-[var(--accent)]";
+  }
 
-  return (
-    <div>
-      <h2 className="text-sm font-normal text-[var(--text)]">{column.heading}</h2>
-      <p className={["mt-1 text-xs font-semibold", captionClass].join(" ")}>
-        {caption}
-      </p>
-      {column.metrics.length > 0 ? (
-        <ul className="mt-4 space-y-3">
-          {column.metrics.map((metric) => (
-            <li
-              key={metric.key}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 text-sm"
-            >
-              <span className="truncate text-[var(--text-dim)]">
-                {metric.label}
-              </span>
-              <span className="font-mono tabular-nums text-[var(--text-dim)]">
-                <span className={valueClass}>
-                  {formatMetricValue(playerValue(metric, side), metric.format)}
-                </span>{" "}
-                vs {formatMetricValue(otherValue(metric, side), metric.format)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-4 text-sm text-[var(--text-dim)]">
-          No comparable primary metrics.
-        </p>
-      )}
-    </div>
-  );
+  return "text-[var(--text-dim)]";
 }
 
 export function HeadlineVerdict({
@@ -242,30 +99,29 @@ export function HeadlineVerdict({
   nicknameA,
   nicknameB,
 }: HeadlineVerdictProps) {
-  const { groupsA, groupsB, closeGroups } = scoreGroups(comparison);
-  const columnA = columnMetrics(comparison, "A", nicknameA);
-  const columnB = columnMetrics(comparison, "B", nicknameB);
+  const buckets = groupVerdictBuckets(comparison);
 
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-7 shadow-sm">
       <div>
-        <p className="text-4xl font-bold tracking-tight text-[var(--text)]">
-          {scoreLine(groupsA, groupsB, nicknameA, nicknameB)}
-        </p>
-        <p className="mt-3 text-sm text-[var(--text-dim)]">
-          {summaryLine(groupsA, groupsB, closeGroups, nicknameA, nicknameB)}
+        <p className="text-3xl font-bold tracking-tight text-[var(--text)] md:text-4xl">
+          {headlineSummary(buckets, nicknameA, nicknameB)}
         </p>
 
-        <div className="mt-8 border-t border-[var(--border)] pt-6">
-          <p className="text-xs text-[var(--text-dim)]">
-            Where each player comes out ahead
-          </p>
-        </div>
-        <div className="mt-4 grid gap-8 md:grid-cols-2">
-          <MetricColumnList column={columnA} side="A" />
-          <div className="border-[var(--border)] md:border-l md:pl-8">
-            <MetricColumnList column={columnB} side="B" />
-          </div>
+        <div className="mt-7 border-t border-[var(--border)] pt-5">
+          <dl className="space-y-3">
+            {comparison.groups.map((group) => (
+              <div
+                key={group.group}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 text-sm"
+              >
+                <dt className="text-[var(--text)]">{groupLabels[group.group]}</dt>
+                <dd className={verdictClass(group)}>
+                  {groupVerdictText(group, nicknameA, nicknameB)}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
     </section>

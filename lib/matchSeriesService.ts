@@ -7,7 +7,7 @@ import {
 } from "@/lib/matchSeriesCache";
 import { validateCompareParams } from "@/lib/compareUseCase";
 import { ApiError } from "@/lib/errors";
-import { fetchRecentMatches } from "@/lib/matchCollector";
+import { syncPlayerMatches } from "@/lib/matchArchive";
 import { resolveProfile } from "@/lib/playerService";
 
 const TARGET_MATCHES = 20;
@@ -53,7 +53,7 @@ function parseMetric(metric: string | null): MatchSeriesMetric {
 
 async function collectPlayerRawSeries(nickname: string) {
   const { playerId } = await resolveProfile(nickname);
-  const matches = await fetchRecentMatches(playerId);
+  const { matches } = await syncPlayerMatches(playerId);
   const recent = matches.slice(0, TARGET_MATCHES).reverse();
 
   if (recent.length === 0) {

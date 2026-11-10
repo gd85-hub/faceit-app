@@ -7,6 +7,7 @@ import {
   getPlayerMatchStats,
 } from "@/lib/faceitClient";
 import { clearMatchSeriesCacheForTests } from "@/lib/matchSeriesCache";
+import { memoryMatchStore, setDefaultMatchStoreForTests } from "@/lib/matchStore";
 import { clearRateLimitForTests } from "@/lib/rateLimit";
 import { readFixture } from "@/lib/__tests__/fixtures";
 import { pagedFixture } from "@/lib/__tests__/faceitMock";
@@ -25,6 +26,7 @@ beforeEach(() => {
   clearCacheForTests();
   clearMatchSeriesCacheForTests();
   clearRateLimitForTests();
+  setDefaultMatchStoreForTests(memoryMatchStore());
   mockedLookup.mockImplementation(async (nickname: string) => ({
     ...readFixture<Record<string, unknown>>("mina616", "player.json"),
     nickname,
@@ -55,5 +57,20 @@ describe("GET /api/match-series", () => {
     expect(mockedLookup).toHaveBeenCalledTimes(2);
     expect(mockedMatchStats).toHaveBeenCalledTimes(6);
     expect(vi.mocked(getPlayerById)).not.toHaveBeenCalled();
+  });
+
+  it("reads stored matches and fetches only the newest page next time", async () => {
+    const url =
+      "http://localhost/api/match-series?playerA=mina616&playerB=opponent-a&metric=adr";
+    await GET(new Request(url));
+    clearMatchSeriesCacheForTests();
+    clearCacheForTests();
+    mockedMatchStats.mockClear();
+
+    const response = await GET(new Request(url));
+
+    expect(response.status).toBe(200);
+    // One page per player: the first page already reaches stored matches.
+    expect(mockedMatchStats).toHaveBeenCalledTimes(2);
   });
 });

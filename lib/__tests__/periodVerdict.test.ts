@@ -95,4 +95,15 @@ describe("periodVerdict", () => {
     );
     expect(verdict[1]).toContain("probably a real change");
   });
+
+  it("words a likely dip as a possible dip, not a real change", () => {
+    const verdict = periodVerdict(
+      comparePeriods([...period(12), ...period(18)], 30),
+    );
+
+    expect(verdict[0]).toBe(
+      "The biggest change: your win rate went from 60% to 40%.",
+    );
+    expect(verdict[1]).toContain("might be a small dip");
+  });
 });

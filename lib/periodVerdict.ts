@@ -70,6 +70,10 @@ function shiftSentence(metrics: PeriodMetricView[]) {
     return "Both moves are bigger than the normal ups and downs.";
   }
 
+  if (allWorse) {
+    return "That might be a small dip, or just normal ups and downs. The next matches will tell.";
+  }
+
   return "That's probably a real change, but it could still be normal ups and downs. The next matches will tell.";
 }
 

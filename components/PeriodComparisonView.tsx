@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { PeriodTrendChart } from "@/components/PeriodTrendChart";
+import {
+  PeriodTrendChart,
+  type TrendMetric,
+} from "@/components/PeriodTrendChart";
 import { formatMetricValue } from "@/lib/formatters";
 import {
   CHANGE_LEVEL_LABELS,
@@ -15,6 +18,7 @@ import {
 } from "@/lib/periodMetrics";
 import { periodVerdict } from "@/lib/periodVerdict";
 import { SEASON_RESET_NOTE } from "@/lib/season";
+import type { MetricKey } from "@/types/metrics";
 
 function WindowToggle({
   nickname,
@@ -183,7 +187,26 @@ export function PeriodComparisonView({
     map: match.map,
     result: match.result,
     kd: matchKd(match),
+    adr: match.adr,
   }));
+  const metricByKey = new Map(data.metrics.map((metric) => [metric.key, metric]));
+  const meanOf = (key: MetricKey) => ({
+    previous: metricByKey.get(key)?.valueB ?? null,
+    recent: metricByKey.get(key)?.valueA ?? null,
+  });
+  const chartMetricFor: Partial<Record<MetricKey, TrendMetric>> = {
+    avgKd: "kd",
+    adr: "adr",
+    winRate: "win",
+  };
+  // Open the chart on the metric that moved the most, if it can be plotted.
+  const topPlottable = sortByChange(data.metrics).find(
+    (metric) =>
+      chartMetricFor[metric.key] !== undefined &&
+      !metric.smallSample &&
+      metric.changeLevel !== "noise" &&
+      metric.changeLevel !== null,
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4">
@@ -237,14 +260,23 @@ export function PeriodComparisonView({
           </Card>
 
           <Card>
-            <h2 className="mb-1 text-lg font-semibold">K/D match by match</h2>
+            <h2 className="mb-1 text-lg font-semibold">Match by match</h2>
             <p className="mb-3 text-sm text-[var(--text-dim)]">
-              Line: 5-match average. Dots: single matches.
+              Dots are single matches. The thick lines are the average of each
+              stretch, so a real change shows up as a step.
             </p>
             <PeriodTrendChart
               points={chartPoints}
+              means={{
+                kd: meanOf("avgKd"),
+                adr: meanOf("adr"),
+                win: meanOf("winRate"),
+              }}
               recentStartIndex={data.previousCount}
-              recentLabel={`last ${window}`}
+              window={window}
+              initialMetric={
+                topPlottable ? chartMetricFor[topPlottable.key] : "kd"
+              }
             />
           </Card>
         </div>

@@ -369,6 +369,76 @@ function gamesStatsJson(player: FixturePlayer, matches: FixtureMatch[]) {
   };
 }
 
+/**
+ * /players/{id}/history — same matches as games-stats.json, newest first.
+ * Other lobby members are anonymous placeholders (player-NNN).
+ */
+function historyJson(player: FixturePlayer, matches: FixtureMatch[]) {
+  const random = rng(player.seed + 1);
+  const lobbyPlayer = (slot: number, matchIndex: number) => {
+    const id = `player-${String((matchIndex * 9 + slot) % 997).padStart(3, "0")}`;
+    return {
+      player_id: `00000000-0000-4000-8000-${hex(random, 12)}`,
+      nickname: id,
+      avatar: "",
+      skill_level: 4 + Math.floor(random() * 6),
+      game_player_id: "",
+      game_player_name: id,
+      faceit_url: "",
+    };
+  };
+
+  return {
+    items: matches.map((match, matchIndex) => {
+      const self = {
+        player_id: player.playerId,
+        nickname: player.nickname,
+        avatar: "",
+        skill_level: player.skillLevel,
+        game_player_id: "",
+        game_player_name: player.nickname,
+        faceit_url: "",
+      };
+      const ownTeam = [self, ...[0, 1, 2, 3].map((slot) => lobbyPlayer(slot, matchIndex))];
+      const enemyTeam = [4, 5, 6, 7, 8].map((slot) => lobbyPlayer(slot, matchIndex));
+      // Alternate sides so tests cover both factions.
+      const ownFaction = matchIndex % 2 === 0 ? "faction1" : "faction2";
+      const enemyFaction = ownFaction === "faction1" ? "faction2" : "faction1";
+      const startedAt = Math.floor((match.finishedAt - 40 * 60_000) / 1000);
+
+      return {
+        match_id: match.matchId,
+        game_id: "cs2",
+        region: "EU",
+        match_type: "",
+        game_mode: "5v5",
+        max_players: 10,
+        teams_size: 5,
+        teams: {
+          [ownFaction]: { team_id: `team-${ownFaction}`, nickname: `team_${player.nickname}`, players: ownTeam },
+          [enemyFaction]: { team_id: `team-${enemyFaction}`, nickname: "team_enemy", players: enemyTeam },
+        },
+        playing_players: [...ownTeam, ...enemyTeam].map((member) => member.player_id),
+        competition_name: "5v5 RANKED",
+        competition_type: "matchmaking",
+        status: "finished",
+        started_at: startedAt,
+        finished_at: Math.floor(match.finishedAt / 1000),
+        results: {
+          winner: match.win ? ownFaction : enemyFaction,
+          score: {
+            [ownFaction]: match.ownScore,
+            [enemyFaction]: match.enemyScore,
+          },
+        },
+        faceit_url: "",
+      };
+    }),
+    start: 0,
+    end: matches.length,
+  };
+}
+
 async function writeJson(file: string, value: unknown) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -385,6 +455,7 @@ async function main() {
   const matches = fixtureMatches(mina.seed);
   const minaDir = path.join(OUT_DIR, mina.dir);
   await writeJson(path.join(minaDir, "games-stats.json"), gamesStatsJson(mina, matches));
+  await writeJson(path.join(minaDir, "history.json"), historyJson(mina, matches));
 
   console.log(`Fixtures written to ${path.relative(process.cwd(), OUT_DIR)}`);
 }

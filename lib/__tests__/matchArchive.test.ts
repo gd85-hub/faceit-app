@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getPlayerMatchStats } from "@/lib/faceitClient";
+import { getPlayerHistory, getPlayerMatchStats } from "@/lib/faceitClient";
 import { syncPlayerMatches } from "@/lib/matchArchive";
 import {
   StoreConflictError,
@@ -12,6 +12,7 @@ import { pagedFixture } from "./faceitMock";
 
 vi.mock("@/lib/faceitClient", () => ({
   getPlayerMatchStats: vi.fn(),
+  getPlayerHistory: vi.fn(),
 }));
 
 const mockedMatchStats = vi.mocked(getPlayerMatchStats);
@@ -34,6 +35,7 @@ function match(id: string, finishedAt: string, kills = 10): CollectedMatch {
 beforeEach(() => {
   vi.resetAllMocks();
   mockedMatchStats.mockImplementation(pagedFixture("mina616", "games-stats.json"));
+  vi.mocked(getPlayerHistory).mockImplementation(pagedFixture("mina616", "history.json"));
 });
 
 describe("mergeMatches", () => {
@@ -116,5 +118,56 @@ describe("syncPlayerMatches", () => {
     const document = await syncPlayerMatches(MINA616_ID, store);
 
     expect(document.matches).toHaveLength(250);
+  });
+
+  it("snapshots the ten-player lobby with collected_at for each new match", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-10T12:00:00Z"));
+
+    try {
+      const document = await syncPlayerMatches(MINA616_ID, memoryMatchStore());
+      const lobby = document.matches[0].lobby;
+
+      expect(lobby?.collected_at).toBe("2026-11-10T12:00:00.000Z");
+      expect(lobby?.players).toHaveLength(10);
+      expect(lobby?.players.filter((player) => player.team === "own")).toHaveLength(5);
+      expect(lobby?.players.filter((player) => player.self)).toEqual([
+        { team: "own", self: true, skill_level: 7 },
+      ]);
+      expect(document.matches.every((item) => item.lobby?.players.length === 10)).toBe(
+        true,
+      );
+      // 250 matches -> 3 history pages of 100.
+      expect(vi.mocked(getPlayerHistory)).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not re-snapshot stored matches", async () => {
+    const store = memoryMatchStore();
+    await syncPlayerMatches(MINA616_ID, store);
+    const stored = store.documents.get(MINA616_ID)!;
+    const keptLobby = stored.document.matches[5].lobby;
+    stored.document.matches = stored.document.matches.slice(2);
+    vi.mocked(getPlayerHistory).mockClear();
+
+    const document = await syncPlayerMatches(MINA616_ID, store);
+
+    // Two new matches fit in the first history page.
+    expect(vi.mocked(getPlayerHistory)).toHaveBeenCalledTimes(1);
+    expect(document.matches[5].lobby).toEqual(keptLobby);
+  });
+
+  it("keeps new matches with lobby null when /history fails", async () => {
+    vi.mocked(getPlayerHistory).mockRejectedValue(
+      Object.assign(new Error("boom"), { status: 500 }),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const document = await syncPlayerMatches(MINA616_ID, memoryMatchStore());
+
+    expect(document.matches).toHaveLength(250);
+    expect(document.matches.every((item) => item.lobby === null)).toBe(true);
   });
 });

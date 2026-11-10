@@ -1,3 +1,4 @@
+import { fetchLobbySnapshots } from "@/lib/lobbySnapshot";
 import { fetchRecentMatches } from "@/lib/matchCollector";
 import {
   StoreConflictError,
@@ -8,8 +9,37 @@ import {
   type PlayerMatchDocument,
   type StoredDocument,
 } from "@/lib/matchStore";
+import type { CollectedMatch, LobbySnapshot } from "@/types/matches";
 
 const WRITE_ATTEMPTS = 2;
+
+/**
+ * Attaches a lobby snapshot (skill levels of all ten players + collected_at)
+ * to each new match. Only new matches get one: the snapshot is only worth
+ * keeping when taken soon after the match, so stored matches are never
+ * re-snapshotted later. A failed /history pass keeps the matches, lobby null.
+ */
+async function withLobbies(playerId: string, matches: CollectedMatch[]) {
+  if (matches.length === 0) {
+    return matches;
+  }
+
+  let snapshots = new Map<string, LobbySnapshot>();
+
+  try {
+    snapshots = await fetchLobbySnapshots(
+      playerId,
+      new Set(matches.map((match) => match.match_id)),
+    );
+  } catch (error) {
+    console.error(`[matchArchive] lobby snapshot failed for ${playerId}`, error);
+  }
+
+  return matches.map((match) => ({
+    ...match,
+    lobby: snapshots.get(match.match_id) ?? null,
+  }));
+}
 
 async function readOrNull(store: MatchStore, playerId: string) {
   try {
@@ -35,7 +65,10 @@ export async function syncPlayerMatches(
   const knownMatchIds = new Set(
     stored?.document.matches.map((match) => match.match_id) ?? [],
   );
-  const fresh = await fetchRecentMatches(playerId, { knownMatchIds });
+  const fresh = await withLobbies(
+    playerId,
+    await fetchRecentMatches(playerId, { knownMatchIds }),
+  );
 
   const build = (base: PlayerMatchDocument): PlayerMatchDocument => ({
     ...base,

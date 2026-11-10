@@ -4,6 +4,7 @@ import { clearCacheForTests } from "@/lib/cache";
 import {
   getPlayerById,
   getPlayerByNickname,
+  getPlayerHistory,
   getPlayerMatchStats,
 } from "@/lib/faceitClient";
 import { clearMatchSeriesCacheForTests } from "@/lib/matchSeriesCache";
@@ -16,6 +17,7 @@ vi.mock("@/lib/faceitClient", () => ({
   getPlayerByNickname: vi.fn(),
   getPlayerById: vi.fn(),
   getPlayerMatchStats: vi.fn(),
+  getPlayerHistory: vi.fn(),
 }));
 
 const mockedLookup = vi.mocked(getPlayerByNickname);
@@ -35,6 +37,7 @@ beforeEach(() => {
       : `id-${nickname}`,
   }));
   mockedMatchStats.mockImplementation(pagedFixture("mina616", "games-stats.json"));
+  vi.mocked(getPlayerHistory).mockImplementation(pagedFixture("mina616", "history.json"));
 });
 
 describe("GET /api/match-series", () => {
@@ -53,9 +56,11 @@ describe("GET /api/match-series", () => {
     expect(body.players.A.points.every((point) => point.raw !== null)).toBe(true);
     // Oldest first.
     expect(body.players.A.points[0].date < body.players.A.points[19].date).toBe(true);
-    // 1 lookup + 3 bulk pages per player, no per-match requests.
+    // Per player: 1 lookup + 3 bulk pages + up to 3 history pages for the
+    // lobby snapshot. No per-match requests.
     expect(mockedLookup).toHaveBeenCalledTimes(2);
     expect(mockedMatchStats).toHaveBeenCalledTimes(6);
+    expect(vi.mocked(getPlayerHistory)).toHaveBeenCalledTimes(6);
     expect(vi.mocked(getPlayerById)).not.toHaveBeenCalled();
   });
 

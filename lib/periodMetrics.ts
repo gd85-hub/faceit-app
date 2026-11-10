@@ -47,14 +47,16 @@ export const periodMetricDefinitions: readonly DerivedMetricDefinition[] = [
     compute: fromValues("avgKd"),
   },
   {
-    key: "kda",
-    label: "K/D/A",
+    // Not "K/D/A": to players KDA is a scoreline like 18 / 15 / 6, which is
+    // shown separately (averageScoreline). This is the ratio.
+    key: "kaPerDeath",
+    label: "(K+A) per death",
     group: "fragging",
     direction: "higher",
     format: "ratio",
     significance: "secondary",
-    hint: "kills plus assists per death",
-    compute: fromValues("kda"),
+    hint: "kills plus assists, divided by deaths",
+    compute: fromValues("kaPerDeath"),
   },
   {
     key: "adr",
@@ -191,11 +193,12 @@ export function periodEstimates(
   matches: readonly CollectedMatch[],
 ): Partial<Record<MetricKey, Estimate>> {
   const kds = present(matches.map(matchKd));
-  const kdas = present(
+  // Matches without assists are left out rather than counted as 0 assists.
+  const kaPerDeath = present(
     matches.map((match) =>
-      match.kills === null || match.deaths === null
+      match.kills === null || match.deaths === null || match.assists === null
         ? null
-        : (match.kills + (match.assists ?? 0)) / Math.max(match.deaths, 1),
+        : (match.kills + match.assists) / Math.max(match.deaths, 1),
     ),
   );
   const adrs = present(matches.map((match) => match.adr));
@@ -208,7 +211,7 @@ export function periodEstimates(
 
   return {
     avgKd: meanEstimate(kds),
-    kda: meanEstimate(kdas),
+    kaPerDeath: meanEstimate(kaPerDeath),
     adr: meanEstimate(adrs),
     // Average of per-match headshot %, like FACEIT's "Average Headshots %".
     hsPercent: meanEstimate(headshotShares),
@@ -250,6 +253,46 @@ function toStats(matches: readonly CollectedMatch[]): NormalizedStats {
   return { metrics, recentResults: null, standardErrors };
 }
 
+/**
+ * Average scoreline per match, the way players read KDA: kills / deaths /
+ * assists. Shown as a reference only; significance is judged on the ratios.
+ */
+export type Scoreline = {
+  kills: number;
+  deaths: number;
+  /** Null when no match in the period has assists data. */
+  assists: number | null;
+};
+
+export function averageScoreline(
+  matches: readonly CollectedMatch[],
+): Scoreline | null {
+  const scored = matches.filter(
+    (match) => match.kills !== null && match.deaths !== null,
+  );
+  const assists = present(matches.map((match) => match.assists));
+  const kills = mean(scored.map((match) => match.kills!));
+  const deaths = mean(scored.map((match) => match.deaths!));
+
+  if (kills === null || deaths === null) {
+    return null;
+  }
+
+  return { kills, deaths, assists: mean(assists) };
+}
+
+/** "18 / 15 / 6", or "18 / 15" while assists are unavailable. */
+export function formatScoreline(scoreline: Scoreline | null) {
+  if (!scoreline) {
+    return "—";
+  }
+
+  const parts = [scoreline.kills, scoreline.deaths, scoreline.assists]
+    .filter((value): value is number => value !== null)
+    .map((value) => String(Math.round(value)));
+  return parts.join(" / ");
+}
+
 export type PeriodMetricView = MetricComparison & {
   hint: string;
   /** Not enough matches to call the change; never presented as a drop. */
@@ -264,6 +307,8 @@ export type PeriodComparison = {
   smallSample: boolean;
   crossesSeason: boolean;
   comparison: ComparisonResult;
+  /** Average kills / deaths / assists per match, for reference. */
+  scoreline: { recent: Scoreline | null; previous: Scoreline | null };
   /** Every metric, in catalog order. */
   metrics: PeriodMetricView[];
   improved: PeriodMetricView[];
@@ -333,6 +378,10 @@ export function comparePeriods(
       chartMatches.map((match) => match.finished_at),
     ),
     comparison,
+    scoreline: {
+      recent: averageScoreline(recent),
+      previous: averageScoreline(previous),
+    },
     metrics: views,
     improved: views.filter(
       (view) => !view.smallSample && view.status === "ahead",

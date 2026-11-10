@@ -4,7 +4,7 @@ import type { PeriodComparison, PeriodMetricView } from "@/lib/periodMetrics";
 import type { MetricKey } from "@/types/metrics";
 
 /** Metrics that describe the player's own play, as opposed to team results. */
-const PERSONAL_METRICS: MetricKey[] = ["avgKd", "kda", "adr"];
+const PERSONAL_METRICS: MetricKey[] = ["avgKd", "kaPerDeath", "adr"];
 const MAX_HEADLINE_METRICS = 2;
 
 /** Changed by more than likely noise, with enough matches to say so. */

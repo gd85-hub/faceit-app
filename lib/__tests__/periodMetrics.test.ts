@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { normalizeBulkItem } from "@/lib/matchCollector";
 import {
+  averageScoreline,
   comparePeriods,
+  formatScoreline,
   parsePeriodWindow,
   periodMetricDefinitions,
   periodValues,
@@ -45,7 +47,7 @@ describe("periodValues", () => {
     ]);
 
     expect(values.avgKd).toBeCloseTo((2 + 1 + 15) / 3);
-    expect(values.kda).toBeCloseTo((2 + 2 + 15) / 3);
+    expect(values.kaPerDeath).toBeCloseTo((2 + 2 + 15) / 3);
     expect(values.adr).toBeCloseTo(70);
     expect(values.hsPercent).toBeCloseTo(50);
     expect(values.winRate).toBeCloseTo(33.33, 1);
@@ -54,6 +56,56 @@ describe("periodValues", () => {
     expect(values.worstThirdAdr).toBe(40);
     // Only 2 losses: too few to judge play in losses.
     expect(values.lossKd).toBeNull();
+  });
+});
+
+describe("average scoreline", () => {
+  it("averages kills / deaths / assists per match and rounds for display", () => {
+    const scoreline = averageScoreline([
+      match({ kills: 20, deaths: 14, assists: 5 }),
+      match({ kills: 17, deaths: 15, assists: 6 }),
+      match({ kills: 17, deaths: 16, assists: 8 }),
+    ]);
+
+    expect(scoreline).toEqual({ kills: 18, deaths: 15, assists: 19 / 3 });
+    expect(formatScoreline(scoreline)).toBe("18 / 15 / 6");
+  });
+
+  it("falls back to kills / deaths when assists are missing", () => {
+    const scoreline = averageScoreline([
+      match({ kills: 18, deaths: 15, assists: null }),
+    ]);
+
+    expect(scoreline?.assists).toBeNull();
+    expect(formatScoreline(scoreline)).toBe("18 / 15");
+  });
+
+  it("is a reference only: no metric in the comparison is the scoreline", () => {
+    const result = comparePeriods(fixtureMatches(), 30);
+
+    expect(formatScoreline(result.scoreline.recent)).toMatch(/^\d+ \/ \d+ \/ \d+$/);
+    expect(formatScoreline(result.scoreline.previous)).toMatch(/^\d+ \/ \d+ \/ \d+$/);
+    expect(result.metrics.map((metric) => metric.key)).not.toContain("kda");
+  });
+});
+
+describe("(K+A) per death", () => {
+  it("does not claim the KDA name", () => {
+    const definition = periodMetricDefinitions.find(
+      (item) => item.key === "kaPerDeath",
+    );
+
+    expect(definition?.label).toBe("(K+A) per death");
+    expect(periodMetricDefinitions.map((item) => item.label)).not.toContain("K/D/A");
+  });
+
+  it("skips matches without assists instead of counting zero", () => {
+    const values = periodValues([
+      match({ kills: 20, deaths: 10, assists: 10 }),
+      match({ kills: 20, deaths: 10, assists: null }),
+    ]);
+
+    expect(values.kaPerDeath).toBe(3);
   });
 });
 

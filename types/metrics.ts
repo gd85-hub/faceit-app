@@ -25,7 +25,7 @@ export type MetricKey =
   | "enemiesFlash"
   | "utilDmgRound"
   // Period (per-match) metrics, see lib/periodMetrics.ts.
-  | "kda"
+  | "kaPerDeath"
   | "kdSpread"
   | "worstThirdAdr"
   | "lossKd";

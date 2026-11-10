@@ -11,6 +11,7 @@ import {
   sortByChange,
 } from "@/lib/periodDisplay";
 import {
+  formatScoreline,
   PERIOD_WINDOWS,
   matchKd,
   type PeriodComparison,
@@ -158,6 +159,35 @@ function ChangeCell({ metric }: { metric: PeriodMetricView }) {
   );
 }
 
+function ScorelineLine({ data }: { data: PeriodComparison }) {
+  const { recent, previous } = data.scoreline;
+
+  if (!recent && !previous) {
+    return null;
+  }
+
+  const hasAssists = recent?.assists != null || previous?.assists != null;
+
+  return (
+    <p className="text-sm text-[var(--text-dim)]">
+      Your average score per match ({hasAssists ? "kills / deaths / assists" : "kills / deaths"}):{" "}
+      <span className="whitespace-nowrap">
+        previous {data.window}{" "}
+        <span className="font-mono text-[var(--text)]">
+          {formatScoreline(previous)}
+        </span>
+      </span>
+      {" → "}
+      <span className="whitespace-nowrap">
+        last {data.window}{" "}
+        <span className="font-mono text-[var(--text)]">
+          {formatScoreline(recent)}
+        </span>
+      </span>
+    </p>
+  );
+}
+
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -233,6 +263,7 @@ export function PeriodComparisonView({
               </p>
             ),
           )}
+          <ScorelineLine data={data} />
           {data.crossesSeason ? (
             <p className="text-sm text-[var(--accent)]">{SEASON_RESET_NOTE}</p>
           ) : null}

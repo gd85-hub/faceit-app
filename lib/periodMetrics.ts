@@ -1,4 +1,5 @@
 import { compare } from "@/lib/comparisonEngine";
+import { mergeMatches } from "@/lib/matchStore";
 import { crossesSeasonStart } from "@/lib/season";
 import type { ComparisonResult, MetricComparison } from "@/types/comparison";
 import type { DerivedMetricDefinition, MetricKey } from "@/types/metrics";
@@ -279,12 +280,15 @@ function lossCount(matches: readonly CollectedMatch[]) {
 
 /**
  * Compares the last `window` matches (A) with the `window` before them (B)
- * using the unchanged comparison engine. `matches` must be newest first.
+ * using the comparison engine. Input order does not matter: matches are
+ * deduplicated by match_id and ordered by finish time here, so the periods
+ * never depend on how storage happened to order them.
  */
 export function comparePeriods(
-  matches: readonly CollectedMatch[],
+  input: readonly CollectedMatch[],
   window: PeriodWindow,
 ): PeriodComparison {
+  const matches = mergeMatches([], input);
   const recent = matches.slice(0, window);
   const previous = matches.slice(window, window * 2);
   const smallSample =

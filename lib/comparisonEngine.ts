@@ -2,6 +2,7 @@ import { metricDefinitions } from "@/lib/metricDefinitions";
 import { formatDiff, formatMetricValue } from "@/lib/formatters";
 import type { MetricDefinition, MetricGroup } from "@/types/metrics";
 import type {
+  ChangeLevel,
   ComparisonHighlight,
   ComparisonResult,
   GroupComparison,
@@ -21,6 +22,44 @@ const GROUP_ORDER: MetricGroup[] = [
   "consistency",
 ];
 const EVEN_DIFF_PERCENT_THRESHOLD = 3;
+const SIGNIFICANT_Z = 2;
+const LIKELY_Z = 1;
+
+/** Classifies |diff| against the standard error of the difference. */
+export function classifyChange(z: number): ChangeLevel {
+  if (z > SIGNIFICANT_Z) {
+    return "significant";
+  }
+
+  return z >= LIKELY_Z ? "likely" : "noise";
+}
+
+function finiteOrNull(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * SE of a difference of two independent estimates: sqrt(seA² + seB²).
+ * For win rate the periods supply the SE of a proportion, so this is the
+ * standard difference-of-proportions test.
+ */
+export function changeSignificance(
+  diff: number | null,
+  seA: number | null | undefined,
+  seB: number | null | undefined,
+): { changeLevel: ChangeLevel | null; changeZ: number | null } {
+  const a = finiteOrNull(seA);
+  const b = finiteOrNull(seB);
+
+  if (diff === null || a === null || b === null) {
+    return { changeLevel: null, changeZ: null };
+  }
+
+  const se = Math.sqrt(a ** 2 + b ** 2);
+  const z = se === 0 ? (diff === 0 ? 0 : Infinity) : Math.abs(diff) / se;
+
+  return { changeLevel: classifyChange(z), changeZ: z };
+}
 
 const SUMMARY_TEMPLATES = {
   biggestGap: (group: MetricGroup, metric: MetricComparison) =>
@@ -127,6 +166,11 @@ function buildMetricComparison(
       definition.direction,
       diff,
       percentDiff,
+    ),
+    ...changeSignificance(
+      diff,
+      a.standardErrors?.[definition.key],
+      b.standardErrors?.[definition.key],
     ),
   };
 }

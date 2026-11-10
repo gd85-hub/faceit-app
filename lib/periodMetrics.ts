@@ -149,7 +149,45 @@ function present<T>(values: Array<T | null>): T[] {
   return values.filter((value): value is T => value !== null);
 }
 
-export function periodValues(matches: readonly CollectedMatch[]): PeriodValues {
+/** Value and standard error of one metric over one period. */
+type Estimate = { value: number | null; se: number | null };
+
+function meanEstimate(values: number[]): Estimate {
+  const sd = standardDeviation(values);
+  return {
+    value: mean(values),
+    se: sd === null ? null : sd / Math.sqrt(values.length),
+  };
+}
+
+/**
+ * Win rate as a proportion, in percent. The SE uses (wins + 0.5) / (n + 1) so
+ * a period with 0% or 100% wins does not get a zero SE.
+ */
+function proportionEstimate(wins: number, total: number): Estimate {
+  if (total === 0) {
+    return { value: null, se: null };
+  }
+
+  const adjusted = (wins + 0.5) / (total + 1);
+  return {
+    value: (wins / total) * 100,
+    se: Math.sqrt((adjusted * (1 - adjusted)) / total) * 100,
+  };
+}
+
+/** Spread of K/D; SE of a sample SD ≈ sd / sqrt(2(n − 1)). */
+function spreadEstimate(values: number[]): Estimate {
+  const sd = standardDeviation(values);
+  return {
+    value: sd,
+    se: sd === null ? null : sd / Math.sqrt(2 * (values.length - 1)),
+  };
+}
+
+export function periodEstimates(
+  matches: readonly CollectedMatch[],
+): Partial<Record<MetricKey, Estimate>> {
   const kds = present(matches.map(matchKd));
   const kdas = present(
     matches.map((match) =>
@@ -159,46 +197,55 @@ export function periodValues(matches: readonly CollectedMatch[]): PeriodValues {
     ),
   );
   const adrs = present(matches.map((match) => match.adr));
+  const headshotShares = present(matches.map((match) => match.hs_percent));
   const decided = matches.filter((match) => match.result !== null);
   const losses = decided.filter((match) => match.result === "L");
   const lossKds = present(losses.map(matchKd));
-  let kills = 0;
-  let headshots = 0;
-
-  for (const match of matches) {
-    if (match.kills !== null && match.hs_percent !== null) {
-      kills += match.kills;
-      headshots += (match.kills * match.hs_percent) / 100;
-    }
-  }
-
   const sortedAdrs = adrs.toSorted((a, b) => a - b);
   const worstThird = sortedAdrs.slice(0, Math.ceil(sortedAdrs.length / 3));
 
   return {
-    avgKd: mean(kds),
-    kda: mean(kdas),
-    adr: mean(adrs),
-    hsPercent: kills > 0 ? (headshots / kills) * 100 : null,
-    winRate:
-      decided.length > 0
-        ? ((decided.length - losses.length) / decided.length) * 100
-        : null,
-    kdSpread: standardDeviation(kds),
-    worstThirdAdr: mean(worstThird),
-    lossKd: lossKds.length >= MIN_LOSSES ? mean(lossKds) : null,
+    avgKd: meanEstimate(kds),
+    kda: meanEstimate(kdas),
+    adr: meanEstimate(adrs),
+    // Average of per-match headshot %, like FACEIT's "Average Headshots %".
+    hsPercent: meanEstimate(headshotShares),
+    winRate: proportionEstimate(decided.length - losses.length, decided.length),
+    kdSpread: spreadEstimate(kds),
+    worstThirdAdr: meanEstimate(worstThird),
+    lossKd:
+      lossKds.length >= MIN_LOSSES
+        ? meanEstimate(lossKds)
+        : { value: null, se: null },
   };
 }
 
-function toStats(values: PeriodValues): NormalizedStats {
+export function periodValues(matches: readonly CollectedMatch[]): PeriodValues {
+  return Object.fromEntries(
+    Object.entries(periodEstimates(matches)).map(([key, estimate]) => [
+      key,
+      estimate.value,
+    ]),
+  ) as PeriodValues;
+}
+
+function toStats(matches: readonly CollectedMatch[]): NormalizedStats {
+  const estimates = periodEstimates(matches);
+  const values = periodValues(matches);
   const metrics = Object.fromEntries(
     periodMetricDefinitions.map((definition) => [
       definition.key,
       definition.compute(values),
     ]),
   ) as NormalizedStats["metrics"];
+  const standardErrors = Object.fromEntries(
+    periodMetricDefinitions.map((definition) => [
+      definition.key,
+      estimates[definition.key]?.se ?? null,
+    ]),
+  );
 
-  return { metrics, recentResults: null };
+  return { metrics, recentResults: null, standardErrors };
 }
 
 export type PeriodMetricView = MetricComparison & {
@@ -242,8 +289,8 @@ export function comparePeriods(
   const fewLosses =
     lossCount(recent) < MIN_LOSSES || lossCount(previous) < MIN_LOSSES;
   const comparison = compare(
-    toStats(periodValues(recent)),
-    toStats(periodValues(previous)),
+    toStats(recent),
+    toStats(previous),
     {
       nicknameA: `Last ${window}`,
       nicknameB: `Previous ${window}`,

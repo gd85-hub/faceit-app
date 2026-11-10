@@ -7,6 +7,11 @@ import type {
 } from "./metrics";
 
 export type MetricStatus = "ahead" | "behind" | "even" | "neutral" | "unknown";
+/**
+ * How sure we are that a change is real rather than normal match-to-match
+ * swing: |diff| > 2 SE, 1–2 SE, < 1 SE of the difference.
+ */
+export type ChangeLevel = "significant" | "likely" | "noise";
 export type GroupVerdict =
   | "A_stronger"
   | "B_stronger"
@@ -25,6 +30,10 @@ export interface MetricComparison {
   diff: number | null;
   diffPercent: number | null;
   status: MetricStatus;
+  /** Null when either side has no standard error (e.g. lifetime stats). */
+  changeLevel: ChangeLevel | null;
+  /** |diff| divided by the standard error of the difference. */
+  changeZ: number | null;
 }
 
 export interface GroupComparison {

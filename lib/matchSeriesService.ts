@@ -1,4 +1,4 @@
-import { faceitFetch, searchPlayer, type FaceitFetchError } from "@/lib/faceitClient";
+import { faceitFetch, type FaceitFetchError } from "@/lib/faceitClient";
 import {
   getCachedMatchSeriesPair,
   matchSeriesCacheKey,
@@ -6,12 +6,9 @@ import {
   type CachedMatchSeriesPair,
   type MatchSeriesRawPoint,
 } from "@/lib/matchSeriesCache";
-import {
-  getCachedPlayerId,
-  setCachedPlayerId,
-} from "@/lib/cache";
 import { validateCompareParams } from "@/lib/compareUseCase";
 import { ApiError } from "@/lib/errors";
+import { resolveProfile } from "@/lib/playerService";
 
 const GAME_ID = "cs2";
 const HISTORY_PAGE_LIMIT = 5;
@@ -49,12 +46,6 @@ export type MatchSeriesResponseBody = {
 export type MatchSeriesResult = {
   body: MatchSeriesResponseBody;
   cacheStatus: "hit" | "miss";
-};
-
-type SearchResponse = {
-  items?: Array<{
-    player_id?: unknown;
-  }>;
 };
 
 type HistoryTeam = {
@@ -135,22 +126,7 @@ function parseMetric(metric: string | null): MatchSeriesMetric {
 }
 
 async function resolvePlayerId(nickname: string) {
-  const cachedPlayerId = getCachedPlayerId(nickname);
-  if (cachedPlayerId) {
-    return cachedPlayerId;
-  }
-
-  const search = await safeFaceitCall(() => searchPlayer(nickname)) as SearchResponse;
-  const firstItem = Array.isArray(search.items) ? search.items[0] : undefined;
-  const playerId =
-    typeof firstItem?.player_id === "string" ? firstItem.player_id : undefined;
-
-  if (!playerId) {
-    throw new ApiError("PLAYER_NOT_FOUND", { nicknames: [nickname] });
-  }
-
-  setCachedPlayerId(nickname, playerId);
-  return playerId;
+  return (await resolveProfile(nickname)).playerId;
 }
 
 function isFinishedHistoryItem(item: HistoryItem) {

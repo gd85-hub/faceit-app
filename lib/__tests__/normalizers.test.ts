@@ -38,7 +38,7 @@ describe("normalizeStats", () => {
   });
 
   it("has the same ordering by kr and avgKd for these samples", () => {
-    const nicknames = ["mina616", "opponent-a", "opponent-b"];
+    const nicknames = ["mina616", "opponent-a", "opponent-b"] as const;
     const normalized = nicknames.map((nickname) => ({
       nickname,
       stats: normalizeStats(readSample(nickname, "stats.json")),
@@ -110,7 +110,7 @@ describe("normalizeStats", () => {
 
 describe("normalizeProfile", () => {
   it("normalizes cs2 elo and skill level as numbers for all three players", () => {
-    for (const nickname of ["mina616", "opponent-a", "opponent-b"]) {
+    for (const nickname of ["mina616", "opponent-a", "opponent-b"] as const) {
       const profile = normalizeProfile(readSample(nickname, "player.json"));
 
       expect(typeof profile.elo).toBe("number");
@@ -195,7 +195,7 @@ describe("metricDefinitions", () => {
   });
 
   it("uses source keys that exist in every real lifetime sample", () => {
-    const lifetimes = ["mina616", "opponent-a", "opponent-b"].map((nickname) => {
+    const lifetimes = (["mina616", "opponent-a", "opponent-b"] as const).map((nickname) => {
       const stats = readSample<{ lifetime: Record<string, unknown> }>(
         nickname,
         "stats.json",

@@ -52,9 +52,14 @@ export async function faceitFetch<T>(path: string): Promise<T> {
   }
 }
 
-export function searchPlayer(nickname: string): Promise<unknown> {
+/**
+ * Exact nickname lookup. Returns the full player object, or fails with HTTP 404
+ * when no account has this nickname. Unlike /search/players there is no list of
+ * candidates to pick from.
+ */
+export function getPlayerByNickname(nickname: string): Promise<unknown> {
   const params = new URLSearchParams({ nickname });
-  return faceitFetch(`/search/players?${params.toString()}`);
+  return faceitFetch(`/players?${params.toString()}`);
 }
 
 export function getPlayerById(playerId: string): Promise<unknown> {

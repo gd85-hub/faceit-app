@@ -2,27 +2,24 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import {
-  getPlayerById,
+  getPlayerByNickname,
   getPlayerStats,
-  searchPlayer,
   type FaceitFetchError,
 } from "../lib/faceitClient";
 
 loadEnvConfig(process.cwd());
 
+// Raw dumps stay local (api-samples/ is git-ignored). Committed test data lives
+// in fixtures/faceit/ and is built by scripts/build-fixtures.ts.
 const NICKNAMES = [
-  "minaa_",
-  "I-Perfect-I",
-  "Eyes_team",
+  "mina616",
   "zzz_does_not_exist_9182", // Intentionally nonexistent; captures error format.
 ];
 
 const REQUEST_DELAY_MS = 300;
 
-type SearchResponse = {
-  items?: Array<{
-    player_id?: string;
-  }>;
+type PlayerResponse = {
+  player_id?: string;
 };
 
 async function saveJson(filePath: string, value: unknown) {
@@ -97,34 +94,23 @@ async function dumpNickname(nickname: string) {
   const sampleDir = path.join(process.cwd(), "api-samples", nickname);
   await mkdir(sampleDir, { recursive: true });
 
-  let search: SearchResponse;
+  let player: PlayerResponse;
 
   try {
-    console.log(`\n${nickname}: search`);
-    search = (await searchPlayer(nickname)) as SearchResponse;
+    console.log(`
+${nickname}: exact lookup`);
+    player = (await getPlayerByNickname(nickname)) as PlayerResponse;
   } catch (error) {
-    await saveJson(path.join(sampleDir, "search-error.json"), responseBodyFromError(error));
-    logError(`${nickname}: search failed`, error);
+    await saveJson(path.join(sampleDir, "player-error.json"), responseBodyFromError(error));
+    logError(`${nickname}: lookup failed`, error);
     return;
   }
 
-  await saveJson(path.join(sampleDir, "search.json"), search);
-  await delay();
+  await saveJson(path.join(sampleDir, "player.json"), player);
 
-  const playerId = search.items?.[0]?.player_id;
+  const playerId = player.player_id;
   if (!playerId) {
-    await saveJson(path.join(sampleDir, "search-error.json"), search);
-    console.error(`${nickname}: search returned no player_id`);
-    return;
-  }
-
-  try {
-    console.log(`${nickname}: player ${playerId}`);
-    const player = await getPlayerById(playerId);
-    await saveJson(path.join(sampleDir, "player.json"), player);
-  } catch (error) {
-    await saveJson(path.join(sampleDir, "player-error.json"), errorToJson(error));
-    logError(`${nickname}: player failed`, error);
+    console.error(`${nickname}: lookup returned no player_id`);
     return;
   }
 

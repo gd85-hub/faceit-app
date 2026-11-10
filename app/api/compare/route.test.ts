@@ -1,17 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readFixture, type FixturePlayer } from "@/lib/__tests__/fixtures";
+import {
+  MINA616_ID,
+  readFixture,
+  type FixturePlayer,
+} from "@/lib/__tests__/fixtures";
 import { GET } from "./route";
 import { clearCacheForTests } from "@/lib/cache";
-import { getPlayerById, getPlayerStats, searchPlayer } from "@/lib/faceitClient";
+import {
+  getPlayerById,
+  getPlayerByNickname,
+  getPlayerStats,
+} from "@/lib/faceitClient";
 import { clearRateLimitForTests } from "@/lib/rateLimit";
 
 vi.mock("@/lib/faceitClient", () => ({
-  searchPlayer: vi.fn(),
+  getPlayerByNickname: vi.fn(),
   getPlayerById: vi.fn(),
   getPlayerStats: vi.fn(),
 }));
 
-const mockedSearchPlayer = vi.mocked(searchPlayer);
+const mockedGetPlayerByNickname = vi.mocked(getPlayerByNickname);
 const mockedGetPlayerById = vi.mocked(getPlayerById);
 const mockedGetPlayerStats = vi.mocked(getPlayerStats);
 
@@ -39,11 +47,9 @@ function mockExistingPlayer(nickname: FixturePlayer) {
   const stats = sample<Record<string, unknown>>(nickname, "stats.json");
   const playerId = profile.player_id as string;
 
-  mockedSearchPlayer.mockResolvedValueOnce({
-    items: [{ player_id: playerId }],
-  });
-  mockedGetPlayerById.mockResolvedValueOnce(profile);
+  mockedGetPlayerByNickname.mockResolvedValueOnce(profile);
   mockedGetPlayerStats.mockResolvedValueOnce(stats);
+  return playerId;
 }
 
 beforeEach(() => {
@@ -53,11 +59,10 @@ beforeEach(() => {
 });
 
 describe("GET /api/compare", () => {
-  it("returns 404 PLAYER_NOT_FOUND for an empty FACEIT search result", async () => {
-    mockedSearchPlayer
-      .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce({ items: [{ player_id: "other-id" }] });
-    mockedGetPlayerById.mockResolvedValueOnce(sample("mina616", "player.json"));
+  it("returns 404 PLAYER_NOT_FOUND when the exact nickname lookup returns 404", async () => {
+    mockedGetPlayerByNickname
+      .mockRejectedValueOnce(faceitError(404, ""))
+      .mockResolvedValueOnce(sample("mina616", "player.json"));
     mockedGetPlayerStats.mockResolvedValueOnce(sample("mina616", "stats.json"));
 
     const response = await GET(
@@ -76,9 +81,9 @@ describe("GET /api/compare", () => {
   });
 
   it("returns both nicknames when both players are not found", async () => {
-    mockedSearchPlayer
-      .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce({ items: [] });
+    mockedGetPlayerByNickname
+      .mockRejectedValueOnce(faceitError(404, ""))
+      .mockRejectedValueOnce(faceitError(404, ""));
 
     const response = await GET(
       request("/api/compare?playerA=missingA&playerB=missingB"),
@@ -98,10 +103,7 @@ describe("GET /api/compare", () => {
   it("returns profiles with comparison null and NO_STATS when a stats response has no lifetime", async () => {
     mockExistingPlayer("mina616");
     const profile = sample<Record<string, unknown>>("opponent-a", "player.json");
-    mockedSearchPlayer.mockResolvedValueOnce({
-      items: [{ player_id: profile.player_id }],
-    });
-    mockedGetPlayerById.mockResolvedValueOnce(profile);
+    mockedGetPlayerByNickname.mockResolvedValueOnce(profile);
     mockedGetPlayerStats.mockResolvedValueOnce({});
 
     const response = await GET(
@@ -135,7 +137,7 @@ describe("GET /api/compare", () => {
         nicknames: [],
       },
     });
-    expect(mockedSearchPlayer).not.toHaveBeenCalled();
+    expect(mockedGetPlayerByNickname).not.toHaveBeenCalled();
   });
 
   it("rejects nicknames with spaces or cyrillic characters before requests", async () => {
@@ -156,11 +158,11 @@ describe("GET /api/compare", () => {
       },
     });
     expect(withCyrillic.status).toBe(400);
-    expect(mockedSearchPlayer).not.toHaveBeenCalled();
+    expect(mockedGetPlayerByNickname).not.toHaveBeenCalled();
   });
 
   it("maps FACEIT 429 to RATE_LIMITED", async () => {
-    mockedSearchPlayer.mockRejectedValueOnce(faceitError(429));
+    mockedGetPlayerByNickname.mockRejectedValueOnce(faceitError(429));
     mockExistingPlayer("opponent-a");
 
     const response = await GET(
@@ -211,7 +213,7 @@ describe("GET /api/compare", () => {
   });
 
   it("maps FACEIT 500 to UPSTREAM_ERROR without proxying the FACEIT body", async () => {
-    mockedSearchPlayer.mockRejectedValueOnce(
+    mockedGetPlayerByNickname.mockRejectedValueOnce(
       faceitError(500, "FACEIT exploded with secret details"),
     );
     mockExistingPlayer("opponent-a");
@@ -228,7 +230,7 @@ describe("GET /api/compare", () => {
   });
 
   it("maps FACEIT timeout to UPSTREAM_ERROR with HTTP 504", async () => {
-    mockedSearchPlayer.mockRejectedValueOnce(faceitError(504, "timeout body"));
+    mockedGetPlayerByNickname.mockRejectedValueOnce(faceitError(504, "timeout body"));
     mockExistingPlayer("opponent-a");
 
     const response = await GET(
@@ -265,6 +267,25 @@ describe("GET /api/compare", () => {
     expect(body.comparison.biggestGap.metricKey).toBe("clutch1v2");
   });
 
+  it("looks players up by exact nickname and uses the returned profile", async () => {
+    const playerId = mockExistingPlayer("mina616");
+    mockExistingPlayer("opponent-a");
+
+    const response = await GET(
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
+    );
+    const body = await response.json() as {
+      playerA: { profile: { playerId: string; nickname: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockedGetPlayerByNickname).toHaveBeenCalledWith("mina616");
+    expect(mockedGetPlayerById).not.toHaveBeenCalled();
+    expect(body.playerA.profile.playerId).toBe(playerId);
+    expect(playerId).toBe(MINA616_ID);
+    expect(body.playerA.profile.nickname).toBe("mina616");
+  });
+
   it("uses cached player IDs, profiles, and stats on the second identical request", async () => {
     mockExistingPlayer("mina616");
     mockExistingPlayer("opponent-a");
@@ -273,7 +294,7 @@ describe("GET /api/compare", () => {
       request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const faceitCallsAfterFirst =
-      mockedSearchPlayer.mock.calls.length +
+      mockedGetPlayerByNickname.mock.calls.length +
       mockedGetPlayerById.mock.calls.length +
       mockedGetPlayerStats.mock.calls.length;
 
@@ -281,7 +302,7 @@ describe("GET /api/compare", () => {
       request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const faceitCallsAfterSecond =
-      mockedSearchPlayer.mock.calls.length +
+      mockedGetPlayerByNickname.mock.calls.length +
       mockedGetPlayerById.mock.calls.length +
       mockedGetPlayerStats.mock.calls.length;
     const secondRequestFaceitCalls =
@@ -293,7 +314,7 @@ describe("GET /api/compare", () => {
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect(faceitCallsAfterFirst).toBe(6);
+    expect(faceitCallsAfterFirst).toBe(4);
     expect(faceitCallsAfterSecond).toBe(faceitCallsAfterFirst);
   });
 });

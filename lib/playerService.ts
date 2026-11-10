@@ -1,7 +1,7 @@
 import {
   getPlayerById,
+  getPlayerByNickname,
   getPlayerStats,
-  searchPlayer,
   type FaceitFetchError,
 } from "@/lib/faceitClient";
 import {
@@ -15,13 +15,7 @@ import {
 import { ApiError } from "@/lib/errors";
 import { normalizeProfile } from "@/lib/playerNormalizer";
 import { normalizeStats } from "@/lib/statsNormalizer";
-import type { Player } from "@/types/stats";
-
-type SearchResponse = {
-  items?: Array<{
-    player_id?: unknown;
-  }>;
-};
+import type { Player, PlayerProfile } from "@/types/stats";
 
 function mapFaceitError(error: unknown): never {
   const faceitError = error as FaceitFetchError;
@@ -50,31 +44,60 @@ async function safeFaceitCall<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function getPlayer(nickname: string): Promise<Player> {
-  let playerId = getCachedPlayerId(nickname);
+function isNotFound(error: unknown) {
+  return (error as FaceitFetchError | undefined)?.status === 404;
+}
 
-  if (!playerId) {
-    const search = await safeFaceitCall(() => searchPlayer(nickname)) as SearchResponse;
-    const firstItem = Array.isArray(search.items) ? search.items[0] : undefined;
-    playerId = typeof firstItem?.player_id === "string"
-      ? firstItem.player_id
-      : undefined;
+async function lookupProfileByNickname(nickname: string): Promise<PlayerProfile> {
+  let rawProfile: unknown;
 
-    if (playerId) {
-      setCachedPlayerId(nickname, playerId);
+  try {
+    rawProfile = await getPlayerByNickname(nickname);
+  } catch (error) {
+    if (isNotFound(error)) {
+      throw new ApiError("PLAYER_NOT_FOUND", { nicknames: [nickname] });
     }
+
+    mapFaceitError(error);
   }
 
-  if (!playerId) {
+  const profile = normalizeProfile(rawProfile);
+
+  if (!profile.playerId) {
     throw new ApiError("PLAYER_NOT_FOUND", { nicknames: [nickname] });
   }
 
-  let profile = getCachedProfile(playerId);
-  if (!profile) {
-    const rawProfile = await safeFaceitCall(() => getPlayerById(playerId));
-    profile = normalizeProfile(rawProfile);
-    setCachedProfile(playerId, profile);
+  return profile;
+}
+
+/**
+ * Resolves a nickname to exactly that account via /players?nickname=X.
+ * There is no fuzzy search step, so a similar-looking nickname can never be
+ * picked up by mistake.
+ */
+export async function resolveProfile(nickname: string): Promise<PlayerProfile> {
+  const cachedPlayerId = getCachedPlayerId(nickname);
+  const cachedProfile = cachedPlayerId
+    ? getCachedProfile(cachedPlayerId)
+    : undefined;
+
+  if (cachedProfile) {
+    return cachedProfile;
   }
+
+  const profile = cachedPlayerId
+    ? normalizeProfile(await safeFaceitCall(() => getPlayerById(cachedPlayerId)))
+    : await lookupProfileByNickname(nickname);
+
+  setCachedPlayerId(nickname, profile.playerId);
+  setCachedProfile(profile.playerId, profile);
+
+  return profile;
+}
+
+export async function getPlayer(nickname: string): Promise<Player> {
+  const profile = await resolveProfile(nickname);
+  const playerId = profile.playerId;
 
   let stats = getCachedStats(playerId);
   if (stats === undefined) {

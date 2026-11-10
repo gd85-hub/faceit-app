@@ -1,23 +1,11 @@
 import { formatMetricValue } from "@/lib/formatters";
+import { isImprovement, isWorse } from "@/lib/periodDisplay";
 import type { PeriodComparison, PeriodMetricView } from "@/lib/periodMetrics";
 import type { MetricKey } from "@/types/metrics";
 
 /** Metrics that describe the player's own play, as opposed to team results. */
 const PERSONAL_METRICS: MetricKey[] = ["avgKd", "kda", "adr"];
 const MAX_HEADLINE_METRICS = 2;
-
-/** True when the change moved in the "better" direction for this metric. */
-export function isImprovement(metric: PeriodMetricView) {
-  if (metric.diff === null || metric.diff === 0) {
-    return false;
-  }
-
-  return metric.direction === "lower" ? metric.diff < 0 : metric.diff > 0;
-}
-
-function isWorse(metric: PeriodMetricView) {
-  return metric.diff !== null && metric.diff !== 0 && !isImprovement(metric);
-}
 
 /** Changed by more than likely noise, with enough matches to say so. */
 function moved(metric: PeriodMetricView) {

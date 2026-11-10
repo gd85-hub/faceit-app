@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PeriodTrendChart } from "@/components/PeriodTrendChart";
-import { formatDiff, formatMetricValue } from "@/lib/formatters";
+import { formatMetricValue } from "@/lib/formatters";
+import { displayChange } from "@/lib/periodDisplay";
 import {
   PERIOD_WINDOWS,
   matchKd,
@@ -65,7 +66,12 @@ function MetricTable({
             <th className="px-3 py-2 text-right font-medium">
               Previous {window}
             </th>
-            <th className="py-2 pl-3 text-right font-medium">Change</th>
+            <th
+              className="py-2 pl-3 text-right font-medium"
+              title="+ means better, even for metrics where smaller is better"
+            >
+              Better / worse
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -90,7 +96,7 @@ function MetricTable({
               </td>
               <td className="py-2 pl-3 text-right font-mono tabular-nums">
                 {showChange ? (
-                  formatDiff(metric.diff, metric.format)
+                  <ChangeCell metric={metric} />
                 ) : (
                   <span className="font-sans text-xs text-[var(--text-dim)]">
                     small sample
@@ -102,6 +108,30 @@ function MetricTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+const ARROWS = { up: "▲", down: "▼", flat: "=" } as const;
+
+function ChangeCell({ metric }: { metric: PeriodMetricView }) {
+  const change = displayChange(metric);
+  const toneClass =
+    change.tone === "better"
+      ? "text-[var(--accent)]"
+      : change.tone === "worse"
+        ? "text-[var(--text-dim)]"
+        : "text-[var(--text-faint)]";
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${toneClass}`}>
+      <span aria-hidden="true" className="text-[10px]">
+        {ARROWS[change.arrow]}
+      </span>
+      <span>{change.text}</span>
+      <span className="sr-only">
+        {change.tone === "flat" ? "no change" : change.tone}
+      </span>
+    </span>
   );
 }
 

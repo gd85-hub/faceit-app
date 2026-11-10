@@ -2,12 +2,12 @@ import Link from "next/link";
 import { PeriodTrendChart } from "@/components/PeriodTrendChart";
 import { formatDiff, formatMetricValue } from "@/lib/formatters";
 import {
-  MIN_PERIOD_MATCHES,
   PERIOD_WINDOWS,
   matchKd,
   type PeriodComparison,
   type PeriodMetricView,
 } from "@/lib/periodMetrics";
+import { periodVerdict } from "@/lib/periodVerdict";
 import { SEASON_RESET_NOTE } from "@/lib/season";
 
 function WindowToggle({
@@ -121,6 +121,7 @@ export function PeriodComparisonView({
   data: PeriodComparison;
 }) {
   const { window, improved, steady, dipped, uncertain } = data;
+  const verdict = periodVerdict(data);
   const chartPoints = data.chartMatches.map((match) => ({
     date: match.finished_at,
     map: match.map,
@@ -130,94 +131,96 @@ export function PeriodComparisonView({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {nickname}: last {window} vs previous {window}
-          </h1>
-          <p className="mt-2 text-sm text-[var(--text-dim)]">
-            The same player, two stretches of matches side by side.
-          </p>
-        </div>
-        <WindowToggle nickname={nickname} window={window} />
-      </div>
-
-      {data.smallSample ? (
-        <p className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-dim)]">
-          Small sample: {data.recentCount} recent and {data.previousCount}{" "}
-          earlier matches. With fewer than {MIN_PERIOD_MATCHES} matches in a
-          stretch, a few games swing every number, so nothing here counts as a
-          drop yet.
-        </p>
-      ) : null}
-
-      {data.crossesSeason ? (
-        <p className="rounded-lg border border-[var(--accent)] p-4 text-sm text-[var(--text)]">
-          {SEASON_RESET_NOTE}
-        </p>
-      ) : null}
-
-      {data.smallSample ? null : (
-      <Card>
-        <h2 className="mb-1 text-lg font-semibold">What got better</h2>
-        {improved.length > 0 ? (
-          <MetricTable metrics={improved} window={window} />
-        ) : (
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[var(--text-dim)]">
-            No big jumps this time. That is normal over {window} matches;
-            progress often shows up a stretch later.
+            {nickname} · last {window} matches compared with the {window}{" "}
+            before
           </p>
-        )}
-        {steady.length > 0 ? (
-          <p className="mt-4 text-sm text-[var(--text-dim)]">
-            Holding steady:{" "}
-            {steady.map((metric) => metric.label).join(", ")}.
-          </p>
-        ) : null}
-      </Card>
-      )}
+          <WindowToggle nickname={nickname} window={window} />
+        </div>
+        <div className="max-w-3xl space-y-3">
+          {verdict.map((sentence, index) =>
+            index === 0 ? (
+              <h1
+                key={sentence}
+                className="text-2xl font-semibold leading-snug tracking-tight"
+              >
+                {sentence}
+              </h1>
+            ) : (
+              <p key={sentence} className="text-lg leading-relaxed">
+                {sentence}
+              </p>
+            ),
+          )}
+          {data.crossesSeason ? (
+            <p className="text-sm text-[var(--accent)]">{SEASON_RESET_NOTE}</p>
+          ) : null}
+        </div>
+      </section>
 
-      {uncertain.length > 0 && !data.smallSample ? (
-        <Card>
-          <h2 className="mb-1 text-lg font-semibold">Small sample</h2>
-          <p className="mb-3 text-sm text-[var(--text-dim)]">
-            Too few matches behind these numbers to call a change either way.
-          </p>
-          <MetricTable metrics={uncertain} window={window} showChange={false} />
-        </Card>
-      ) : null}
+      <details className="group space-y-6">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--text)]">
+          <span className="group-open:hidden">What exactly changed</span>
+          <span className="hidden group-open:inline">Hide details</span>
+        </summary>
 
-      {data.smallSample && uncertain.length > 0 ? (
-        <Card>
-          <h2 className="mb-3 text-lg font-semibold">The numbers so far</h2>
-          <MetricTable metrics={uncertain} window={window} showChange={false} />
-        </Card>
-      ) : null}
+        <div className="mt-6 space-y-6">
+          {improved.length > 0 || steady.length > 0 ? (
+            <Card>
+              <h2 className="mb-1 text-lg font-semibold">What got better</h2>
+              {improved.length > 0 ? (
+                <MetricTable metrics={improved} window={window} />
+              ) : null}
+              {steady.length > 0 ? (
+                <p className="mt-4 text-sm text-[var(--text-dim)]">
+                  Holding steady:{" "}
+                  {steady.map((metric) => metric.label).join(", ")}.
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
 
-      {dipped.length > 0 ? (
-        <details className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
-          <summary className="cursor-pointer text-sm font-medium text-[var(--text-dim)] hover:text-[var(--text)]">
-            Where it dipped ({dipped.length})
-          </summary>
-          <p className="mb-3 mt-3 text-sm text-[var(--text-dim)]">
-            Every player has stretches like this. Over {window} matches a few
-            rough games move these numbers a lot.
-          </p>
-          <MetricTable metrics={dipped} window={window} />
-        </details>
-      ) : null}
+          {uncertain.length > 0 ? (
+            <Card>
+              <h2 className="mb-1 text-lg font-semibold">Small sample</h2>
+              <p className="mb-3 text-sm text-[var(--text-dim)]">
+                Too few matches behind these numbers to call a change either
+                way.
+              </p>
+              <MetricTable
+                metrics={uncertain}
+                window={window}
+                showChange={false}
+              />
+            </Card>
+          ) : null}
 
-      <Card>
-        <h2 className="mb-1 text-lg font-semibold">K/D match by match</h2>
-        <p className="mb-3 text-sm text-[var(--text-dim)]">
-          Line: 5-match average. Dots: single matches.
-        </p>
-        <PeriodTrendChart
-          points={chartPoints}
-          recentStartIndex={data.previousCount}
-          recentLabel={`last ${window}`}
-        />
-      </Card>
+          {dipped.length > 0 ? (
+            <Card>
+              <h2 className="mb-1 text-lg font-semibold">Where it dipped</h2>
+              <p className="mb-3 text-sm text-[var(--text-dim)]">
+                Every player has stretches like this. Over {window} matches a
+                few rough games move these numbers a lot.
+              </p>
+              <MetricTable metrics={dipped} window={window} />
+            </Card>
+          ) : null}
+
+          <Card>
+            <h2 className="mb-1 text-lg font-semibold">K/D match by match</h2>
+            <p className="mb-3 text-sm text-[var(--text-dim)]">
+              Line: 5-match average. Dots: single matches.
+            </p>
+            <PeriodTrendChart
+              points={chartPoints}
+              recentStartIndex={data.previousCount}
+              recentLabel={`last ${window}`}
+            />
+          </Card>
+        </div>
+      </details>
     </div>
   );
 }

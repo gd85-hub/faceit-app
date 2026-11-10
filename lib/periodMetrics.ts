@@ -262,6 +262,8 @@ export type PeriodComparison = {
   smallSample: boolean;
   crossesSeason: boolean;
   comparison: ComparisonResult;
+  /** Every metric, in catalog order. */
+  metrics: PeriodMetricView[];
   improved: PeriodMetricView[];
   steady: PeriodMetricView[];
   dipped: PeriodMetricView[];
@@ -326,6 +328,7 @@ export function comparePeriods(
       chartMatches.map((match) => match.finished_at),
     ),
     comparison,
+    metrics: views,
     improved: views.filter(
       (view) => !view.smallSample && view.status === "ahead",
     ),

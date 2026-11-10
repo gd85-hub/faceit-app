@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { PeriodTrendChart } from "@/components/PeriodTrendChart";
 import { formatMetricValue } from "@/lib/formatters";
-import { displayChange } from "@/lib/periodDisplay";
+import {
+  CHANGE_LEVEL_LABELS,
+  displayChange,
+  isWorse,
+  sortByChange,
+} from "@/lib/periodDisplay";
 import {
   PERIOD_WINDOWS,
   matchKd,
@@ -47,18 +52,34 @@ function WindowToggle({
   );
 }
 
+function LevelCell({ metric }: { metric: PeriodMetricView }) {
+  if (metric.smallSample || metric.changeLevel === null) {
+    return <span className="text-[var(--text-faint)]">Small sample</span>;
+  }
+
+  return (
+    <span
+      className={
+        metric.changeLevel === "noise"
+          ? "text-[var(--text-faint)]"
+          : "text-[var(--text)]"
+      }
+    >
+      {CHANGE_LEVEL_LABELS[metric.changeLevel]}
+    </span>
+  );
+}
+
 function MetricTable({
   metrics,
   window,
-  showChange = true,
 }: {
   metrics: PeriodMetricView[];
   window: number;
-  showChange?: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] text-sm">
+      <table className="w-full min-w-[520px] text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-dim)]">
             <th className="py-2 pr-3 font-medium">Metric</th>
@@ -67,15 +88,16 @@ function MetricTable({
               Previous {window}
             </th>
             <th
-              className="py-2 pl-3 text-right font-medium"
+              className="px-3 py-2 text-right font-medium"
               title="+ means better, even for metrics where smaller is better"
             >
               Better / worse
             </th>
+            <th className="py-2 pl-3 text-right font-medium">Is it real?</th>
           </tr>
         </thead>
         <tbody>
-          {metrics.map((metric) => (
+          {sortByChange(metrics).map((metric) => (
             <tr
               key={metric.key}
               className="border-b border-[var(--border)] last:border-b-0"
@@ -94,14 +116,11 @@ function MetricTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums text-[var(--text-dim)]">
                 {formatMetricValue(metric.valueB, metric.format)}
               </td>
-              <td className="py-2 pl-3 text-right font-mono tabular-nums">
-                {showChange ? (
-                  <ChangeCell metric={metric} />
-                ) : (
-                  <span className="font-sans text-xs text-[var(--text-dim)]">
-                    small sample
-                  </span>
-                )}
+              <td className="px-3 py-2 text-right font-mono tabular-nums">
+                <ChangeCell metric={metric} />
+              </td>
+              <td className="py-2 pl-3 text-right text-xs">
+                <LevelCell metric={metric} />
               </td>
             </tr>
           ))}
@@ -150,7 +169,14 @@ export function PeriodComparisonView({
   nickname: string;
   data: PeriodComparison;
 }) {
-  const { window, improved, steady, dipped, uncertain } = data;
+  const { window } = data;
+  const hasRealDip = data.metrics.some(
+    (metric) =>
+      !metric.smallSample &&
+      metric.changeLevel !== "noise" &&
+      metric.changeLevel !== null &&
+      isWorse(metric),
+  );
   const verdict = periodVerdict(data);
   const chartPoints = data.chartMatches.map((match) => ({
     date: match.finished_at,
@@ -197,46 +223,18 @@ export function PeriodComparisonView({
         </summary>
 
         <div className="mt-6 space-y-6">
-          {improved.length > 0 || steady.length > 0 ? (
-            <Card>
-              <h2 className="mb-1 text-lg font-semibold">What got better</h2>
-              {improved.length > 0 ? (
-                <MetricTable metrics={improved} window={window} />
-              ) : null}
-              {steady.length > 0 ? (
-                <p className="mt-4 text-sm text-[var(--text-dim)]">
-                  Holding steady:{" "}
-                  {steady.map((metric) => metric.label).join(", ")}.
-                </p>
-              ) : null}
-            </Card>
-          ) : null}
-
-          {uncertain.length > 0 ? (
-            <Card>
-              <h2 className="mb-1 text-lg font-semibold">Small sample</h2>
-              <p className="mb-3 text-sm text-[var(--text-dim)]">
-                Too few matches behind these numbers to call a change either
-                way.
-              </p>
-              <MetricTable
-                metrics={uncertain}
-                window={window}
-                showChange={false}
-              />
-            </Card>
-          ) : null}
-
-          {dipped.length > 0 ? (
-            <Card>
-              <h2 className="mb-1 text-lg font-semibold">Where it dipped</h2>
-              <p className="mb-3 text-sm text-[var(--text-dim)]">
-                Every player has stretches like this. Over {window} matches a
-                few rough games move these numbers a lot.
-              </p>
-              <MetricTable metrics={dipped} window={window} />
-            </Card>
-          ) : null}
+          <Card>
+            <h2 className="mb-1 text-lg font-semibold">All the numbers</h2>
+            <p className="mb-3 text-sm text-[var(--text-dim)]">
+              Biggest changes first, up or down. &ldquo;Normal swing&rdquo;
+              means the difference is no bigger than the usual ups and downs
+              between matches.
+              {hasRealDip
+                ? ` Every player has rough stretches, and over ${window} matches a few bad games move these numbers a lot.`
+                : ""}
+            </p>
+            <MetricTable metrics={data.metrics} window={window} />
+          </Card>
 
           <Card>
             <h2 className="mb-1 text-lg font-semibold">K/D match by match</h2>

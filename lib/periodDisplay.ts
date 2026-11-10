@@ -45,3 +45,26 @@ export function displayChange(metric: ChangeInput): ChangeDisplay {
     ? { text, arrow: "up", tone: "better" }
     : { text, arrow: "down", tone: "worse" };
 }
+
+type SortableMetric = {
+  changeZ: number | null;
+  smallSample: boolean;
+};
+
+/**
+ * Orders metrics by how clearly they changed (changeZ, largest first),
+ * whether up or down. Small-sample metrics go last: their change is not
+ * meaningful yet.
+ */
+export function sortByChange<T extends SortableMetric>(metrics: readonly T[]): T[] {
+  const rank = (metric: T) =>
+    metric.smallSample || metric.changeZ === null ? -1 : metric.changeZ;
+
+  return metrics.toSorted((a, b) => rank(b) - rank(a));
+}
+
+export const CHANGE_LEVEL_LABELS = {
+  significant: "Real shift",
+  likely: "Maybe",
+  noise: "Normal swing",
+} as const;

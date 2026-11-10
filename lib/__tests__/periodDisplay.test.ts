@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { displayChange, isImprovement, isWorse } from "@/lib/periodDisplay";
+import {
+  displayChange,
+  isImprovement,
+  isWorse,
+  sortByChange,
+} from "@/lib/periodDisplay";
 import { periodMetricDefinitions } from "@/lib/periodMetrics";
 
 function definition(key: string) {
@@ -52,5 +57,25 @@ describe("displayChange", () => {
       arrow: "flat",
       tone: "flat",
     });
+  });
+});
+
+describe("sortByChange", () => {
+  it("orders by strength of change, not by up or down, small samples last", () => {
+    const rows = [
+      { key: "kd", changeZ: 1.1, smallSample: false },
+      { key: "winRate", changeZ: 2.2, smallSample: false },
+      { key: "lossKd", changeZ: 5, smallSample: true },
+      { key: "spread", changeZ: 1.6, smallSample: false },
+      { key: "adr", changeZ: null, smallSample: false },
+    ];
+
+    expect(sortByChange(rows).map((row) => row.key)).toEqual([
+      "winRate",
+      "spread",
+      "kd",
+      "lossKd",
+      "adr",
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const NICKNAMES = ["minaa_", "I-Perfect-I", "Eyes_team"] as const;
+const NICKNAMES = ["mina616", "opponent-a", "opponent-b"] as const;
 
 type StatsResponse = {
   lifetime?: Record<string, unknown>;
@@ -20,7 +20,8 @@ async function main() {
   for (const nickname of NICKNAMES) {
     const filePath = path.join(
       process.cwd(),
-      "api-samples",
+      "fixtures",
+      "faceit",
       nickname,
       "stats.json",
     );

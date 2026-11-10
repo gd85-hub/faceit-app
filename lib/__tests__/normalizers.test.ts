@@ -1,23 +1,17 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readFixture, type FixturePlayer } from "./fixtures";
 import { metricDefinitions } from "@/lib/metricDefinitions";
 import { normalizeProfile } from "@/lib/playerNormalizer";
 import { normalizeStats } from "@/lib/statsNormalizer";
 import type { SourceMetricDefinition } from "@/types/metrics";
 
-function readSample<T>(nickname: string, fileName: string): T {
-  return JSON.parse(
-    readFileSync(
-      path.join(process.cwd(), "api-samples", nickname, fileName),
-      "utf8",
-    ),
-  ) as T;
+function readSample<T>(player: FixturePlayer, fileName: string): T {
+  return readFixture<T>(player, fileName);
 }
 
 describe("normalizeStats", () => {
-  it("normalizes lifetime metrics from minaa_ stats", () => {
-    const stats = normalizeStats(readSample("minaa_", "stats.json"));
+  it("normalizes lifetime metrics from mina616 stats", () => {
+    const stats = normalizeStats(readSample("mina616", "stats.json"));
 
     expect(stats?.metrics.avgKd).toBe(1.13);
     expect(stats?.metrics.winRate).toBe(49);
@@ -25,26 +19,26 @@ describe("normalizeStats", () => {
   });
 
   it("converts fractional percent sources to 0..100 project units", () => {
-    const stats = normalizeStats(readSample("minaa_", "stats.json"));
+    const stats = normalizeStats(readSample("mina616", "stats.json"));
 
     expect(stats?.metrics.entrySuccess).toBe(53);
   });
 
   it("computes lifetime K/R for all three real samples", () => {
-    expect(normalizeStats(readSample("minaa_", "stats.json"))?.metrics.kr).toBeCloseTo(
+    expect(normalizeStats(readSample("mina616", "stats.json"))?.metrics.kr).toBeCloseTo(
       0.732,
       3,
     );
     expect(
-      normalizeStats(readSample("I-Perfect-I", "stats.json"))?.metrics.kr,
+      normalizeStats(readSample("opponent-a", "stats.json"))?.metrics.kr,
     ).toBeCloseTo(0.848, 3);
     expect(
-      normalizeStats(readSample("Eyes_team", "stats.json"))?.metrics.kr,
+      normalizeStats(readSample("opponent-b", "stats.json"))?.metrics.kr,
     ).toBeCloseTo(0.77, 3);
   });
 
   it("has the same ordering by kr and avgKd for these samples", () => {
-    const nicknames = ["minaa_", "I-Perfect-I", "Eyes_team"];
+    const nicknames = ["mina616", "opponent-a", "opponent-b"];
     const normalized = nicknames.map((nickname) => ({
       nickname,
       stats: normalizeStats(readSample(nickname, "stats.json")),
@@ -82,7 +76,7 @@ describe("normalizeStats", () => {
   });
 
   it("normalizes recent results to W/L values", () => {
-    const stats = normalizeStats(readSample("minaa_", "stats.json"));
+    const stats = normalizeStats(readSample("mina616", "stats.json"));
 
     expect(stats?.recentResults?.slice(0, 3)).toEqual(["W", "L", "W"]);
   });
@@ -116,7 +110,7 @@ describe("normalizeStats", () => {
 
 describe("normalizeProfile", () => {
   it("normalizes cs2 elo and skill level as numbers for all three players", () => {
-    for (const nickname of ["minaa_", "I-Perfect-I", "Eyes_team"]) {
+    for (const nickname of ["mina616", "opponent-a", "opponent-b"]) {
       const profile = normalizeProfile(readSample(nickname, "player.json"));
 
       expect(typeof profile.elo).toBe("number");
@@ -201,7 +195,7 @@ describe("metricDefinitions", () => {
   });
 
   it("uses source keys that exist in every real lifetime sample", () => {
-    const lifetimes = ["minaa_", "I-Perfect-I", "Eyes_team"].map((nickname) => {
+    const lifetimes = ["mina616", "opponent-a", "opponent-b"].map((nickname) => {
       const stats = readSample<{ lifetime: Record<string, unknown> }>(
         nickname,
         "stats.json",

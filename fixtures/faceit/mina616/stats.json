@@ -1,0 +1,181 @@
+{
+  "player_id": "dbe1f3ef-69d2-4c4c-a435-98f7220b1d28",
+  "game_id": "cs2",
+  "lifetime": {
+    "1v1 Win Rate": "0.36",
+    "1v2 Win Rate": "0.22",
+    "ADR": "81.03",
+    "Average Headshots %": "43",
+    "Average K/D Ratio": "1.13",
+    "Current Win Streak": "0",
+    "Enemies Flashed per Round": "0.27",
+    "Entry Rate": "0.18",
+    "Entry Success Rate": "0.53",
+    "Flash Success Rate": "0.53",
+    "Flashes per Round": "0.35",
+    "K/D Ratio": "1423.58",
+    "Longest Win Streak": "7",
+    "Matches": "1259",
+    "Recent Results": [
+      "1",
+      "0",
+      "1",
+      "0",
+      "0"
+    ],
+    "Sniper Kill Rate": "0.12",
+    "Sniper Kill Rate per Round": "0.17",
+    "Total 1v1 Count": "1064",
+    "Total 1v1 Wins": "384",
+    "Total 1v2 Count": "1221",
+    "Total 1v2 Wins": "268",
+    "Total Damage": "2246331",
+    "Total Enemies Flashed": "7615",
+    "Total Entry Count": "4983",
+    "Total Entry Wins": "2633",
+    "Total Flash Count": "9620",
+    "Total Flash Successes": "5071",
+    "Total Headshots %": "54465",
+    "Total Kills with extended stats": "20307",
+    "Total Matches": "1259",
+    "Total Rounds with extended stats": "27723",
+    "Total Sniper Kills": "3393",
+    "Total Utility Count": "9178",
+    "Total Utility Damage": "100925",
+    "Total Utility Successes": "3477",
+    "Utility Damage Success Rate": "11",
+    "Utility Damage per Round": "3.64",
+    "Utility Success Rate": "0.38",
+    "Utility Usage per Round": "0.33",
+    "Win Rate %": "49",
+    "Wins": "618"
+  },
+  "segments": [
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Inferno",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "170",
+        "Wins": "92",
+        "Win Rate %": "54",
+        "Rounds": "3740",
+        "Kills": "2693",
+        "Deaths": "2172",
+        "Average K/D Ratio": "1.24",
+        "ADR": "87.12",
+        "Average Headshots %": "42"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Dust2",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "114",
+        "Wins": "54",
+        "Win Rate %": "47",
+        "Rounds": "2508",
+        "Kills": "1806",
+        "Deaths": "1570",
+        "Average K/D Ratio": "1.15",
+        "ADR": "77.2",
+        "Average Headshots %": "44"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Mirage",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "192",
+        "Wins": "84",
+        "Win Rate %": "44",
+        "Rounds": "4224",
+        "Kills": "3041",
+        "Deaths": "2622",
+        "Average K/D Ratio": "1.16",
+        "ADR": "83.3",
+        "Average Headshots %": "42"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Nuke",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "170",
+        "Wins": "78",
+        "Win Rate %": "46",
+        "Rounds": "3740",
+        "Kills": "2693",
+        "Deaths": "2207",
+        "Average K/D Ratio": "1.22",
+        "ADR": "77.71",
+        "Average Headshots %": "42"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Ancient",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "250",
+        "Wins": "118",
+        "Win Rate %": "47",
+        "Rounds": "5500",
+        "Kills": "3960",
+        "Deaths": "3568",
+        "Average K/D Ratio": "1.11",
+        "ADR": "80.01",
+        "Average Headshots %": "41"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Anubis",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "124",
+        "Wins": "58",
+        "Win Rate %": "47",
+        "Rounds": "2728",
+        "Kills": "1964",
+        "Deaths": "1870",
+        "Average K/D Ratio": "1.05",
+        "ADR": "79.71",
+        "Average Headshots %": "42"
+      }
+    },
+    {
+      "type": "Map",
+      "mode": "5v5",
+      "label": "Train",
+      "img_small": "",
+      "img_regular": "",
+      "stats": {
+        "Matches": "239",
+        "Wins": "124",
+        "Win Rate %": "52",
+        "Rounds": "5258",
+        "Kills": "3786",
+        "Deaths": "3292",
+        "Average K/D Ratio": "1.15",
+        "ADR": "86.41",
+        "Average Headshots %": "45"
+      }
+    }
+  ]
+}

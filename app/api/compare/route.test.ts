@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFixture, type FixturePlayer } from "@/lib/__tests__/fixtures";
 import { GET } from "./route";
 import { clearCacheForTests } from "@/lib/cache";
 import { getPlayerById, getPlayerStats, searchPlayer } from "@/lib/faceitClient";
@@ -16,13 +15,8 @@ const mockedSearchPlayer = vi.mocked(searchPlayer);
 const mockedGetPlayerById = vi.mocked(getPlayerById);
 const mockedGetPlayerStats = vi.mocked(getPlayerStats);
 
-function sample<T>(nickname: string, fileName: string): T {
-  return JSON.parse(
-    readFileSync(
-      path.join(process.cwd(), "api-samples", nickname, fileName),
-      "utf8",
-    ),
-  ) as T;
+function sample<T>(player: FixturePlayer, fileName: string): T {
+  return readFixture<T>(player, fileName);
 }
 
 function request(pathname: string) {
@@ -40,7 +34,7 @@ function faceitError(status: number, body = "FACEIT private details") {
   });
 }
 
-function mockExistingPlayer(nickname: string) {
+function mockExistingPlayer(nickname: FixturePlayer) {
   const profile = sample<Record<string, unknown>>(nickname, "player.json");
   const stats = sample<Record<string, unknown>>(nickname, "stats.json");
   const playerId = profile.player_id as string;
@@ -63,11 +57,11 @@ describe("GET /api/compare", () => {
     mockedSearchPlayer
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({ items: [{ player_id: "other-id" }] });
-    mockedGetPlayerById.mockResolvedValueOnce(sample("minaa_", "player.json"));
-    mockedGetPlayerStats.mockResolvedValueOnce(sample("minaa_", "stats.json"));
+    mockedGetPlayerById.mockResolvedValueOnce(sample("mina616", "player.json"));
+    mockedGetPlayerStats.mockResolvedValueOnce(sample("mina616", "stats.json"));
 
     const response = await GET(
-      request("/api/compare?playerA=missing&playerB=minaa_"),
+      request("/api/compare?playerA=missing&playerB=mina616"),
     );
     const body = await readJson(response);
 
@@ -102,8 +96,8 @@ describe("GET /api/compare", () => {
   });
 
   it("returns profiles with comparison null and NO_STATS when a stats response has no lifetime", async () => {
-    mockExistingPlayer("minaa_");
-    const profile = sample<Record<string, unknown>>("I-Perfect-I", "player.json");
+    mockExistingPlayer("mina616");
+    const profile = sample<Record<string, unknown>>("opponent-a", "player.json");
     mockedSearchPlayer.mockResolvedValueOnce({
       items: [{ player_id: profile.player_id }],
     });
@@ -111,7 +105,7 @@ describe("GET /api/compare", () => {
     mockedGetPlayerStats.mockResolvedValueOnce({});
 
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const body = await response.json() as {
       comparison: unknown;
@@ -129,7 +123,7 @@ describe("GET /api/compare", () => {
 
   it("rejects the same player with different case before requests", async () => {
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=MINAA_"),
+      request("/api/compare?playerA=mina616&playerB=MINA616"),
     );
     const body = await readJson(response);
 
@@ -146,10 +140,10 @@ describe("GET /api/compare", () => {
 
   it("rejects nicknames with spaces or cyrillic characters before requests", async () => {
     const withSpace = await GET(
-      request("/api/compare?playerA=minaa_%20x&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616%20x&playerB=opponent-a"),
     );
     const withCyrillic = await GET(
-      request("/api/compare?playerA=%D0%BC%D0%B8%D0%BD%D0%B0&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=%D0%BC%D0%B8%D0%BD%D0%B0&playerB=opponent-a"),
     );
 
     expect(withSpace.status).toBe(400);
@@ -167,10 +161,10 @@ describe("GET /api/compare", () => {
 
   it("maps FACEIT 429 to RATE_LIMITED", async () => {
     mockedSearchPlayer.mockRejectedValueOnce(faceitError(429));
-    mockExistingPlayer("I-Perfect-I");
+    mockExistingPlayer("opponent-a");
 
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const body = await readJson(response);
 
@@ -187,7 +181,7 @@ describe("GET /api/compare", () => {
   it("rate limits /api/compare to 20 requests per minute per IP", async () => {
     for (let index = 0; index < 20; index += 1) {
       const response = await GET(
-        new Request("http://localhost/api/compare?playerA=minaa_&playerB=MINAA_", {
+        new Request("http://localhost/api/compare?playerA=mina616&playerB=MINA616", {
           headers: {
             "x-forwarded-for": "203.0.113.10",
           },
@@ -198,7 +192,7 @@ describe("GET /api/compare", () => {
     }
 
     const response = await GET(
-      new Request("http://localhost/api/compare?playerA=minaa_&playerB=MINAA_", {
+      new Request("http://localhost/api/compare?playerA=mina616&playerB=MINA616", {
         headers: {
           "x-forwarded-for": "203.0.113.10",
         },
@@ -220,10 +214,10 @@ describe("GET /api/compare", () => {
     mockedSearchPlayer.mockRejectedValueOnce(
       faceitError(500, "FACEIT exploded with secret details"),
     );
-    mockExistingPlayer("I-Perfect-I");
+    mockExistingPlayer("opponent-a");
 
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const bodyText = await response.text();
 
@@ -235,10 +229,10 @@ describe("GET /api/compare", () => {
 
   it("maps FACEIT timeout to UPSTREAM_ERROR with HTTP 504", async () => {
     mockedSearchPlayer.mockRejectedValueOnce(faceitError(504, "timeout body"));
-    mockExistingPlayer("I-Perfect-I");
+    mockExistingPlayer("opponent-a");
 
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const body = await readJson(response);
 
@@ -252,12 +246,12 @@ describe("GET /api/compare", () => {
     });
   });
 
-  it("returns a comparison for mocked minaa_ and I-Perfect-I data", async () => {
-    mockExistingPlayer("minaa_");
-    mockExistingPlayer("I-Perfect-I");
+  it("returns a comparison for mocked mina616 and opponent-a data", async () => {
+    mockExistingPlayer("mina616");
+    mockExistingPlayer("opponent-a");
 
     const response = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const body = await response.json() as {
       comparison: {
@@ -272,11 +266,11 @@ describe("GET /api/compare", () => {
   });
 
   it("uses cached player IDs, profiles, and stats on the second identical request", async () => {
-    mockExistingPlayer("minaa_");
-    mockExistingPlayer("I-Perfect-I");
+    mockExistingPlayer("mina616");
+    mockExistingPlayer("opponent-a");
 
     const first = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const faceitCallsAfterFirst =
       mockedSearchPlayer.mock.calls.length +
@@ -284,7 +278,7 @@ describe("GET /api/compare", () => {
       mockedGetPlayerStats.mock.calls.length;
 
     const second = await GET(
-      request("/api/compare?playerA=minaa_&playerB=I-Perfect-I"),
+      request("/api/compare?playerA=mina616&playerB=opponent-a"),
     );
     const faceitCallsAfterSecond =
       mockedSearchPlayer.mock.calls.length +

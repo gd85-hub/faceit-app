@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const NICKNAMES = ["minaa_", "I-Perfect-I", "Eyes_team"] as const;
+const NICKNAMES = ["mina616", "opponent-a", "opponent-b"] as const;
 
 type ValidationResult = {
   nickname: string;
@@ -35,7 +35,8 @@ export async function validateSegments(): Promise<ValidationResult[]> {
   for (const nickname of NICKNAMES) {
     const filePath = path.join(
       process.cwd(),
-      "api-samples",
+      "fixtures",
+      "faceit",
       nickname,
       "stats.json",
     );

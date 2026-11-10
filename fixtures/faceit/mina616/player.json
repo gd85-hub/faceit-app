@@ -1,0 +1,24 @@
+{
+  "player_id": "dbe1f3ef-69d2-4c4c-a435-98f7220b1d28",
+  "nickname": "mina616",
+  "avatar": "",
+  "country": "ru",
+  "cover_image": "",
+  "games": {
+    "cs2": {
+      "region": "EU",
+      "game_player_id": "",
+      "skill_level": 7,
+      "faceit_elo": 1532,
+      "game_player_name": "mina616",
+      "skill_level_label": "7",
+      "game_profile_id": ""
+    }
+  },
+  "faceit_url": "https://www.faceit.com/{lang}/players/mina616",
+  "membership_type": "",
+  "memberships": [
+    "free"
+  ],
+  "verified": false
+}

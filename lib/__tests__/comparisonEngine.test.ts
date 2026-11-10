@@ -1,18 +1,12 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readFixture, type FixturePlayer } from "./fixtures";
 import { compare } from "@/lib/comparisonEngine";
 import { metricDefinitions } from "@/lib/metricDefinitions";
 import { normalizeStats } from "@/lib/statsNormalizer";
 import type { NormalizedStats } from "@/types/stats";
 
-function readStats(nickname: string) {
-  return JSON.parse(
-    readFileSync(
-      path.join(process.cwd(), "api-samples", nickname, "stats.json"),
-      "utf8",
-    ),
-  ) as unknown;
+function readStats(player: FixturePlayer) {
+  return readFixture(player, "stats.json");
 }
 
 function statsWithMetricValues(value: number): NormalizedStats {
@@ -44,9 +38,9 @@ function statsWithMetrics(
 
 describe("compare", () => {
   it("includes metric direction from metricDefinitions", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!);
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!);
     const currentWin = result.groups
       .flatMap((group) => group.metrics)
       .find((metric) => metric.key === "currentWin");
@@ -59,9 +53,9 @@ describe("compare", () => {
   });
 
   it("does not count neutral metrics as comparable", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!);
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!);
     const resultsGroup = result.groups.find((group) => group.group === "results");
 
     expect(resultsGroup?.metrics.filter((metric) => metric.direction === "neutral"))
@@ -73,7 +67,7 @@ describe("compare", () => {
 
   it("keeps null values as unknown comparisons", () => {
     const left = normalizeStats({ lifetime: {} });
-    const right = normalizeStats(readStats("minaa_"));
+    const right = normalizeStats(readStats("mina616"));
     const result = compare(left!, right!);
 
     expect(
@@ -85,9 +79,9 @@ describe("compare", () => {
   });
 
   it("marks small percent differences as even", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!);
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!);
     const utilityDamage = result.groups
       .flatMap((group) => group.metrics)
       .find((metric) => metric.key === "utilDmgRound");
@@ -123,8 +117,8 @@ describe("compare", () => {
   });
 
   it("chooses a behind metric over a larger ahead metric for biggestGap", () => {
-    const left = normalizeStats(readStats("minaa_"));
-    const right = normalizeStats(readStats("I-Perfect-I"));
+    const left = normalizeStats(readStats("mina616"));
+    const right = normalizeStats(readStats("opponent-a"));
     const result = compare(left!, right!);
 
     expect(result.biggestGap?.metric.key).not.toBe("enemiesFlash");
@@ -295,10 +289,10 @@ describe("compare", () => {
     expect(result.weakestGroup).toBeNull();
   });
 
-  it("returns fragging as weakestGroup for minaa_ versus I-Perfect-I samples", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!);
+  it("returns fragging as weakestGroup for mina616 versus opponent-a samples", () => {
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!);
 
     expect(result.weakestGroup?.group).toBe("fragging");
   });
@@ -331,9 +325,9 @@ describe("compare", () => {
   });
 
   it("uses spec verdicts and closest only from close groups", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!);
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!);
 
     expect(result.groups.map((group) => group.verdict)).not.toContain("behind");
     expect(result.groups.map((group) => group.verdict)).not.toContain("mixed");
@@ -344,10 +338,10 @@ describe("compare", () => {
     expect(result.groups.every((group) => group.verdict !== "close")).toBe(true);
   });
 
-  it("returns B_stronger in fragging for minaa_ versus I-Perfect-I samples", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const fragging = compare(minaa!, perfect!).groups.find(
+  it("returns B_stronger in fragging for mina616 versus opponent-a samples", () => {
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const fragging = compare(mina!, perfect!).groups.find(
       (group) => group.group === "fragging",
     );
 
@@ -357,25 +351,25 @@ describe("compare", () => {
   });
 
   it("uses player nicknames in summary text", () => {
-    const minaa = normalizeStats(readStats("minaa_"));
-    const perfect = normalizeStats(readStats("I-Perfect-I"));
-    const result = compare(minaa!, perfect!, {
-      nicknameA: "minaa_",
-      nicknameB: "I-Perfect-I",
+    const mina = normalizeStats(readStats("mina616"));
+    const perfect = normalizeStats(readStats("opponent-a"));
+    const result = compare(mina!, perfect!, {
+      nicknameA: "mina616",
+      nicknameB: "opponent-a",
     });
 
-    expect(result.summary.join("\n")).toContain("I-Perfect-I is stronger");
+    expect(result.summary.join("\n")).toContain("opponent-a is stronger");
     expect(result.summary.join("\n")).not.toContain("Player A");
     expect(result.summary.join("\n")).not.toContain("Player B");
   });
 
   it("uses nicknameA in summary when player A has the stronger group", () => {
     const result = compare(statsWithMetricValues(10), statsWithMetricValues(1), {
-      nicknameA: "minaa_",
-      nicknameB: "I-Perfect-I",
+      nicknameA: "mina616",
+      nicknameB: "opponent-a",
     });
 
-    expect(result.summary.join("\n")).toContain("minaa_ is stronger");
+    expect(result.summary.join("\n")).toContain("mina616 is stronger");
     expect(result.summary.join("\n")).not.toContain("Player A");
     expect(result.summary.join("\n")).not.toContain("Player B");
   });

@@ -4,12 +4,13 @@ import { compare } from "@/lib/comparisonEngine";
 import { normalizeStats } from "@/lib/statsNormalizer";
 
 const DONK_SH1RO_PAIR = ["donk666", "sh1ro"] as const;
-const FALLBACK_PAIR = ["minaa_", "I-Perfect-I"] as const;
+const FALLBACK_PAIR = ["mina616", "opponent-a"] as const;
 
 async function readStats(nickname: string) {
   const filePath = path.join(
     process.cwd(),
-    "api-samples",
+    "fixtures",
+    "faceit",
     nickname,
     "stats.json",
   );
@@ -44,7 +45,7 @@ function primaryCounts(group: ReturnType<typeof compare>["groups"][number]) {
 
 async function hasStatsSample(nickname: string) {
   try {
-    await access(path.join(process.cwd(), "api-samples", nickname, "stats.json"));
+    await access(path.join(process.cwd(), "fixtures", "faceit", nickname, "stats.json"));
     return true;
   } catch {
     return false;

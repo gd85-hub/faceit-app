@@ -58,7 +58,7 @@ describe("periodVerdict", () => {
     );
 
     // A whole-distribution ADR shift also lifts ADR in the weakest matches.
-    expect(verdict[0]).toMatch(/^The biggest changes?: your ADR/);
+    expect(verdict[0]).toMatch(/^The biggest changes?: your /);
     expect(verdict[0]).toContain("your ADR went from 80 to 105");
     expect(verdict[1]).toContain("bigger than the normal ups and downs");
   });

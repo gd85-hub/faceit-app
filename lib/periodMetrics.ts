@@ -97,12 +97,13 @@ export const periodMetricDefinitions: readonly DerivedMetricDefinition[] = [
   },
   {
     key: "worstThirdAdr",
-    label: "ADR on off days",
+    // Not "ADR ...": next to the ADR metric that read like a duplicate.
+    label: "Damage in weak games",
     group: "consistency",
     direction: "higher",
     format: "number",
     significance: "primary",
-    hint: "average ADR in the weakest third of matches",
+    hint: "average damage per round in the weakest third of matches",
     compute: fromValues("worstThirdAdr"),
   },
   {

@@ -3,6 +3,7 @@ import { normalizeBulkItem } from "@/lib/matchCollector";
 import {
   comparePeriods,
   parsePeriodWindow,
+  periodMetricDefinitions,
   periodValues,
 } from "@/lib/periodMetrics";
 import {
@@ -53,6 +54,24 @@ describe("periodValues", () => {
     expect(values.worstThirdAdr).toBe(40);
     // Only 2 losses: too few to judge play in losses.
     expect(values.lossKd).toBeNull();
+  });
+});
+
+describe("periodMetricDefinitions", () => {
+  it("has unique labels and no second metric named after ADR", () => {
+    const labels = periodMetricDefinitions.map((definition) => definition.label);
+
+    expect(new Set(labels).size).toBe(labels.length);
+    // "ADR, ..., ADR on off days" in one list read as ADR twice.
+    expect(labels.filter((label) => label.startsWith("ADR"))).toEqual(["ADR"]);
+  });
+
+  it("lists every metric exactly once in a comparison", () => {
+    const result = comparePeriods(fixtureMatches(), 30);
+
+    expect(result.metrics.map((metric) => metric.key).toSorted()).toEqual(
+      periodMetricDefinitions.map((definition) => definition.key).toSorted(),
+    );
   });
 });
 

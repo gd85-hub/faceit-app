@@ -18,6 +18,7 @@ const GROUP_ORDER: MetricGroup[] = [
   "entry",
   "clutch",
   "utility",
+  "consistency",
 ];
 const EVEN_DIFF_PERCENT_THRESHOLD = 3;
 
@@ -255,6 +256,12 @@ function buildSummary(
 type CompareOptions = {
   nicknameA?: string;
   nicknameB?: string;
+  /**
+   * Metric catalog to compare by. Defaults to the lifetime catalog; the
+   * period screen passes its per-match catalog and compares one player's
+   * last N matches (A) against the N before them (B).
+   */
+  definitions?: readonly MetricDefinition[];
 };
 
 export function compare(
@@ -264,11 +271,15 @@ export function compare(
 ): ComparisonResult {
   const nicknameA = options.nicknameA ?? "A";
   const nicknameB = options.nicknameB ?? "B";
-  const metrics = metricDefinitions.map((definition) =>
+  const definitions = options.definitions ?? metricDefinitions;
+  const metrics = definitions.map((definition) =>
     buildMetricComparison(definition, a, b),
   );
+  const presentGroups = GROUP_ORDER.filter((group) =>
+    definitions.some((definition) => definition.group === group),
+  );
 
-  const groups = GROUP_ORDER.map((group) => {
+  const groups = presentGroups.map((group) => {
     const groupMetrics = metrics.filter((metric) => metric.group === group);
     const countable = groupMetrics.filter(isCountable);
     const aheadCount = countable.filter((metric) => metric.status === "ahead").length;

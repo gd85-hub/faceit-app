@@ -1,7 +1,13 @@
 export type MetricFormat = "percent" | "ratio" | "number" | "integer";
 export type MetricDirection = "higher" | "lower" | "neutral";
 export type MetricSignificance = "primary" | "secondary";
-export type MetricGroup = "fragging" | "results" | "entry" | "clutch" | "utility";
+export type MetricGroup =
+  | "fragging"
+  | "results"
+  | "entry"
+  | "clutch"
+  | "utility"
+  | "consistency";
 export type MetricKey =
   | "avgKd"
   | "kr"
@@ -17,7 +23,12 @@ export type MetricKey =
   | "clutch1v2"
   | "flashSuccess"
   | "enemiesFlash"
-  | "utilDmgRound";
+  | "utilDmgRound"
+  // Period (per-match) metrics, see lib/periodMetrics.ts.
+  | "kda"
+  | "kdSpread"
+  | "worstThirdAdr"
+  | "lossKd";
 
 export interface BaseMetricDefinition {
   key: MetricKey;

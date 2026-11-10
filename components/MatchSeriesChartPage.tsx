@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   Tooltip,
@@ -14,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatMetricValue } from "@/lib/formatters";
+import { SEASON_RESET_LABEL, seasonStartIndex } from "@/lib/season";
 
 type ChartMetric = "kd" | "adr";
 
@@ -275,6 +277,15 @@ function MatchSeriesChart({ data }: { data: MatchSeriesResponse }) {
   const format = chartFormat(data.metric);
   const nicknameA = data.players.A.nickname;
   const nicknameB = data.players.B.nickname;
+  // Both series are oldest to newest; mark where each crosses the Elo reset.
+  const seasonMarks = [
+    ...new Set(
+      [data.players.A.points, data.players.B.points]
+        .map((points) => seasonStartIndex(points.map((point) => point.date)))
+        .filter((index): index is number => index !== null)
+        .map((index) => index + 1),
+    ),
+  ];
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -314,6 +325,20 @@ function MatchSeriesChart({ data }: { data: MatchSeriesResponse }) {
                 />
               }
             />
+            {seasonMarks.map((idx) => (
+              <ReferenceLine
+                key={idx}
+                x={idx}
+                stroke="var(--accent)"
+                strokeDasharray="4 4"
+                label={{
+                  value: SEASON_RESET_LABEL,
+                  position: "insideTopLeft",
+                  fill: "var(--accent)",
+                  fontSize: 11,
+                }}
+              />
+            ))}
             <Line
               type="monotone"
               dataKey="aSmooth"

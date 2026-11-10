@@ -7,6 +7,7 @@ export const groupLabels: Record<MetricGroup, string> = {
   entry: "Entry",
   clutch: "Clutch",
   utility: "Utility",
+  consistency: "Consistency",
 };
 
 export const groupHints: Record<MetricGroup, string> = {
@@ -15,6 +16,7 @@ export const groupHints: Record<MetricGroup, string> = {
   entry: "first duels of the round",
   clutch: "playing outnumbered",
   utility: "grenades and flashes",
+  consistency: "steady games and bad days",
 };
 
 export function verdictLabels(

@@ -17,6 +17,12 @@ export function SiteHeader({ showNewComparison = false }: SiteHeaderProps) {
             FACEIT <span className="font-mono text-[var(--accent)]">CS2</span>{" "}
             Compare
           </Link>
+          <Link
+            href="/progress"
+            className="shrink-0 text-sm text-[var(--text-dim)] transition-colors hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--text)]"
+          >
+            Progress
+          </Link>
           {showNewComparison ? (
             <Link
               href="/"

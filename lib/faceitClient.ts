@@ -74,3 +74,42 @@ export function getPlayerStats(
     `/players/${encodeURIComponent(playerId)}/stats/${encodeURIComponent(gameId)}`,
   );
 }
+
+export type PageParams = {
+  offset: number;
+  limit: number;
+};
+
+/**
+ * Bulk per-match stats: one item per match with the player's own numbers.
+ * Up to 100 matches per request.
+ */
+export function getPlayerMatchStats(
+  playerId: string,
+  gameId: string,
+  { offset, limit }: PageParams,
+): Promise<unknown> {
+  const params = new URLSearchParams({
+    offset: String(offset),
+    limit: String(limit),
+  });
+  return faceitFetch(
+    `/players/${encodeURIComponent(playerId)}/games/${encodeURIComponent(gameId)}/stats?${params.toString()}`,
+  );
+}
+
+/** Match history: teams and lobby players per match. Up to 100 per request. */
+export function getPlayerHistory(
+  playerId: string,
+  gameId: string,
+  { offset, limit }: PageParams,
+): Promise<unknown> {
+  const params = new URLSearchParams({
+    game: gameId,
+    offset: String(offset),
+    limit: String(limit),
+  });
+  return faceitFetch(
+    `/players/${encodeURIComponent(playerId)}/history?${params.toString()}`,
+  );
+}

@@ -36,7 +36,7 @@ function mapFaceitError(error: unknown): never {
   throw new ApiError("UPSTREAM_ERROR");
 }
 
-async function safeFaceitCall<T>(call: () => Promise<T>): Promise<T> {
+export async function safeFaceitCall<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call();
   } catch (error) {

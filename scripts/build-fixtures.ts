@@ -260,6 +260,115 @@ function statsJson(player: FixturePlayer) {
   };
 }
 
+const GAME_MAPS = [
+  "de_inferno",
+  "de_dust2",
+  "de_mirage",
+  "de_nuke",
+  "de_ancient",
+  "de_anubis",
+  "de_train",
+] as const;
+const MATCH_COUNT = 250;
+// Newest fixture match finishes here; older ones go back ~7h each.
+const NEWEST_MATCH_AT = Date.UTC(2026, 10, 9, 20, 0, 0);
+
+function hex(random: () => number, length: number) {
+  let out = "";
+  for (let index = 0; index < length; index += 1) {
+    out += Math.floor(random() * 16).toString(16);
+  }
+  return out;
+}
+
+function fakeUuid(random: () => number) {
+  return `${hex(random, 8)}-${hex(random, 4)}-4${hex(random, 3)}-8${hex(random, 3)}-${hex(random, 12)}`;
+}
+
+export type FixtureMatch = {
+  matchId: string;
+  finishedAt: number;
+  map: string;
+  win: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  headshots: number;
+  adr: number;
+  rounds: number;
+  ownScore: number;
+  enemyScore: number;
+};
+
+/**
+ * Newest-first list of matches for mina616. Form improves slightly towards
+ * the newest matches so the period screen has something to show.
+ */
+function fixtureMatches(seed: number): FixtureMatch[] {
+  const random = rng(seed);
+  const matches: FixtureMatch[] = [];
+
+  for (let index = 0; index < MATCH_COUNT; index += 1) {
+    const recency = 1 - index / MATCH_COUNT; // 1 = newest
+    const win = random() < 0.47 + recency * 0.08;
+    const ownScore = win ? 13 : Math.floor(random() * 12);
+    const enemyScore = win ? Math.floor(random() * 12) : 13;
+    const rounds = ownScore + enemyScore;
+    const form = 0.85 + recency * 0.2 + (random() - 0.5) * 0.5 + (win ? 0.12 : -0.12);
+    const kills = Math.max(3, Math.round(rounds * 0.72 * form));
+    const deaths = Math.max(4, Math.round(rounds * 0.66 * (2 - form) * 0.95));
+    const headshots = Math.round(kills * (0.35 + random() * 0.2));
+
+    matches.push({
+      matchId: `1-${fakeUuid(random)}`,
+      finishedAt: NEWEST_MATCH_AT - index * 7 * 3600_000 - Math.floor(random() * 3600_000),
+      map: GAME_MAPS[Math.floor(random() * GAME_MAPS.length)],
+      win,
+      kills,
+      deaths,
+      assists: Math.round(rounds * (0.1 + random() * 0.15)),
+      headshots,
+      adr: round(kills * 4.6 + random() * 12 + (form - 1) * 20, 1),
+      rounds,
+      ownScore,
+      enemyScore,
+    });
+  }
+
+  return matches;
+}
+
+/** /players/{id}/games/cs2/stats — all items, newest first; tests slice it. */
+function gamesStatsJson(player: FixturePlayer, matches: FixtureMatch[]) {
+  return {
+    items: matches.map((match) => ({
+      stats: {
+        "Match Id": match.matchId,
+        "Player Id": player.playerId,
+        Nickname: player.nickname,
+        "Game Mode": "5v5",
+        "Competition Name": "5v5 RANKED",
+        Map: match.map,
+        Result: match.win ? "1" : "0",
+        Score: `${match.ownScore} / ${match.enemyScore}`,
+        Rounds: String(match.rounds),
+        Kills: String(match.kills),
+        Deaths: String(match.deaths),
+        Assists: String(match.assists),
+        Headshots: String(match.headshots),
+        "Headshots %": String(Math.round((match.headshots / match.kills) * 100)),
+        "K/D Ratio": String(round(match.kills / match.deaths)),
+        "K/R Ratio": String(round(match.kills / match.rounds)),
+        ADR: String(match.adr),
+        "Match Finished At": match.finishedAt,
+        "Created At": new Date(match.finishedAt - 40 * 60_000).toISOString(),
+      },
+    })),
+    start: 0,
+    end: matches.length,
+  };
+}
+
 async function writeJson(file: string, value: unknown) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -271,6 +380,11 @@ async function main() {
     await writeJson(path.join(dir, "player.json"), playerJson(player));
     await writeJson(path.join(dir, "stats.json"), statsJson(player));
   }
+
+  const mina = PLAYERS[0];
+  const matches = fixtureMatches(mina.seed);
+  const minaDir = path.join(OUT_DIR, mina.dir);
+  await writeJson(path.join(minaDir, "games-stats.json"), gamesStatsJson(mina, matches));
 
   console.log(`Fixtures written to ${path.relative(process.cwd(), OUT_DIR)}`);
 }

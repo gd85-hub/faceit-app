@@ -90,6 +90,9 @@ export async function syncPlayerMatches(
   for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt += 1) {
     try {
       await store.write(playerId, document, stored?.etag ?? null);
+      console.info(
+        `[matchArchive] saved ${document.matches.length} matches for ${playerId} (+${fresh.length} new)`,
+      );
       return document;
     } catch (error) {
       if (!(error instanceof StoreConflictError) || attempt === WRITE_ATTEMPTS) {

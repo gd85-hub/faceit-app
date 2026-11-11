@@ -167,11 +167,16 @@ export function memoryMatchStore(): MatchStore & {
   };
 }
 
-function blobConfigured() {
-  return Boolean(
-    process.env.BLOB_READ_WRITE_TOKEN ||
-      (process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN),
-  );
+/**
+ * Either a read-write token or a store id is enough. With BLOB_STORE_ID the
+ * SDK authenticates via Vercel OIDC, whose token at runtime comes from the
+ * request (x-vercel-oidc-token), not from process.env — so VERCEL_OIDC_TOKEN
+ * must not be required here.
+ */
+export function blobConfigured(
+  env: Partial<Record<string, string | undefined>> = process.env,
+) {
+  return Boolean(env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID);
 }
 
 let defaultStore: MatchStore | null | undefined;
@@ -180,6 +185,12 @@ let defaultStore: MatchStore | null | undefined;
 export function getDefaultMatchStore(): MatchStore | null {
   if (defaultStore === undefined) {
     defaultStore = blobConfigured() ? blobMatchStore() : null;
+
+    if (!defaultStore) {
+      console.warn(
+        "[matchStore] Blob is not configured (no BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID): matches are collected but not saved.",
+      );
+    }
   }
 
   return defaultStore;

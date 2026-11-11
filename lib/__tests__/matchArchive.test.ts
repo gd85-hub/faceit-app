@@ -171,3 +171,14 @@ describe("syncPlayerMatches", () => {
     expect(document.matches.every((item) => item.lobby === null)).toBe(true);
   });
 });
+
+describe("blobConfigured", () => {
+  it("accepts a read-write token or a store id alone", async () => {
+    const { blobConfigured } = await import("@/lib/matchStore");
+
+    expect(blobConfigured({ BLOB_READ_WRITE_TOKEN: "t" })).toBe(true);
+    // OIDC: the token comes from the request at runtime, not from env.
+    expect(blobConfigured({ BLOB_STORE_ID: "store_x" })).toBe(true);
+    expect(blobConfigured({})).toBe(false);
+  });
+});
